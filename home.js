@@ -183,7 +183,16 @@
                     subtitle: this.stripHtml(apt.desc || ''),
                     meta: this.formatDate(apt.date),
                     onClick: () => {
-                        window.SmartAgenda.Navigation.switchTab('appointments');
+                        // Switch to appointments tab and open the specific appointment
+                        if (window.SmartAgenda?.Navigation) {
+                            window.SmartAgenda.Navigation.switchTab('appointments');
+                        }
+                        // After a short delay, open the appointment modal
+                        setTimeout(() => {
+                            if (window.SmartAgenda.Appointments) {
+                                window.SmartAgenda.Appointments.showAppointmentModal(apt);
+                            }
+                        }, 200);
                     }
                 });
                 container.appendChild(item);
@@ -238,7 +247,16 @@
                     subtitle: task.clientName ? this.stripHtml(task.desc || '') : '',
                     meta: task.date ? this.formatDate(task.date) : '',
                     onClick: () => {
-                        window.SmartAgenda.Navigation.switchTab('tasks');
+                        // Switch to tasks tab and open the specific task
+                        if (window.SmartAgenda?.Navigation) {
+                            window.SmartAgenda.Navigation.switchTab('tasks');
+                        }
+                        // After a short delay, open the task modal
+                        setTimeout(() => {
+                            if (window.SmartAgenda.Tasks) {
+                                window.SmartAgenda.Tasks.showTaskModal(task);
+                            }
+                        }, 200);
                     }
                 });
                 container.appendChild(item);

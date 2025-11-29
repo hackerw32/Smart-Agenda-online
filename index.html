@@ -91,7 +91,7 @@
                 </button>
                 <button class="nav-item" data-tab="advanced">
                     <span class="nav-icon">⚡</span>
-                    <span class="nav-label">Advanced</span>
+                    <span class="nav-label" data-i18n="nav.advanced">Advanced</span>
                 </button>
                 <button class="nav-item" data-tab="settings">
                     <span class="nav-icon">⚙️</span>
@@ -115,34 +115,6 @@
                 <div class="dashboard-container">
                     <h2 class="dashboard-title" data-i18n="dashboard.title">Dashboard</h2>
                     
-                    <!-- Today's Summary -->
-                    <div class="dashboard-section">
-                        <h3 data-i18n="dashboard.today">Today's Overview</h3>
-                        <div class="stats-grid">
-                            <div class="stat-card">
-                                <div class="stat-icon">📅</div>
-                                <div class="stat-info">
-                                    <div class="stat-value" id="today-appointments">0</div>
-                                    <div class="stat-label" data-i18n="dashboard.appointments">Appointments</div>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon">✓</div>
-                                <div class="stat-info">
-                                    <div class="stat-value" id="today-tasks">0</div>
-                                    <div class="stat-label" data-i18n="dashboard.tasks">Tasks</div>
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-icon">💰</div>
-                                <div class="stat-info">
-                                    <div class="stat-value" id="today-revenue">€0</div>
-                                    <div class="stat-label" data-i18n="dashboard.revenue">Revenue</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Revenue Forecast -->
                     <div class="dashboard-section">
                         <h3 data-i18n="dashboard.revenue_forecast">Revenue Forecast (Next 30 Days)</h3>
@@ -171,17 +143,6 @@
                         <div id="dashboard-tasks" class="dashboard-list"></div>
                     </div>
 
-                    <!-- Recent Clients -->
-                    <div class="dashboard-section">
-                        <div class="section-header">
-                            <h3 data-i18n="dashboard.recent_clients">Recent Clients</h3>
-                            <button class="btn-link" onclick="SmartAgenda.Navigation.switchTab('clients')">
-                                <span data-i18n="actions.view_all">View All</span> →
-                            </button>
-                        </div>
-                        <div id="dashboard-clients" class="dashboard-list"></div>
-                    </div>
-
                     <!-- Analytics -->
                     <div class="dashboard-section">
                         <h3 data-i18n="dashboard.analytics">Analytics</h3>
@@ -206,7 +167,7 @@
                     <div class="tab-actions">
                         <button class="btn-icon" id="clients-sort-btn" aria-label="Sort">
                             <span>⬍</span>
-                            <span>Sort</span>
+                            <span data-i18n="actions.sort">Sort</span>
                         </button>
                         <button class="btn-icon" id="clients-filter-btn" aria-label="Filter">
                             <span>🔽</span>
@@ -389,6 +350,7 @@
                             <select id="theme-select">
                                 <option value="light" data-i18n="settings.light">Light</option>
                                 <option value="dark" data-i18n="settings.dark">Dark</option>
+                                <option value="kouzmidis">Kouzmidis</option>
                             </select>
                         </div>
                         <div class="setting-item">
@@ -411,10 +373,10 @@
                         <div class="setting-item">
                             <label data-i18n="settings.font_size">Font Size</label>
                             <select id="font-size-select">
-                                <option value="small">Small</option>
-                                <option value="medium">Medium (Default)</option>
-                                <option value="large">Large</option>
-                                <option value="extra-large">Extra Large</option>
+                                <option value="small" data-i18n="settings.font_small">Small</option>
+                                <option value="medium" data-i18n="settings.font_medium">Medium (Default)</option>
+                                <option value="large" data-i18n="settings.font_large">Large</option>
+                                <option value="extra-large" data-i18n="settings.font_extra_large">Extra Large</option>
                             </select>
                         </div>
                     </div>
@@ -425,8 +387,8 @@
                         <div class="setting-item">
                             <label for="notifications-enabled" data-i18n="notifications.enabled">Enable Notifications</label>
                             <select id="notifications-enabled">
-                                <option value="true">Enabled</option>
-                                <option value="false">Disabled</option>
+                                <option value="true" data-i18n="settings.enabled">Enabled</option>
+                                <option value="false" data-i18n="settings.disabled">Disabled</option>
                             </select>
                         </div>
                         <div class="setting-item">

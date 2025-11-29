@@ -49,26 +49,52 @@
     --primary-color: #3b82f6;
     --primary-hover: #2563eb;
     --primary-light: #60a5fa;
-    
+
     --background: #0f172a;
     --surface: #1e293b;
     --surface-hover: #334155;
-    
+
     --text-primary: #f1f5f9;
     --text-secondary: #cbd5e1;
     --text-tertiary: #94a3b8;
-    
+
     --border: #334155;
     --border-hover: #475569;
-    
+
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
     --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-    
+
     --success: #22c55e;
     --warning: #fbbf24;
     --danger: #f87171;
     --info: #60a5fa;
+}
+
+[data-theme="kouzmidis"] {
+    --primary-color: #FF6600;
+    --primary-hover: #E55A00;
+    --primary-light: #FF8533;
+
+    --background: #2d2d2d;
+    --surface: #3a3a3a;
+    --surface-hover: #4a4a4a;
+
+    --text-primary: #FFB74D;
+    --text-secondary: #FFA726;
+    --text-tertiary: #FF9800;
+
+    --border: #4a4a4a;
+    --border-hover: #5a5a5a;
+
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6);
+
+    --success: #4CAF50;
+    --warning: #FFB300;
+    --danger: #E53935;
+    --info: #2196F3;
 }
 
 /* ============================================
