@@ -31,11 +31,11 @@
         },
 
         render: function() {
-            this.renderStats();
+            // Removed renderStats() - today's overview section was removed
             this.renderRevenueForecast();
             this.renderUpcomingAppointments();
             this.renderPendingTasks();
-            this.renderRecentClients();
+            // Removed renderRecentClients() - recent clients section was removed
             this.renderAnalytics();
         },
 
