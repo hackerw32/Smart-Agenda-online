@@ -498,7 +498,7 @@
                     'Client Types': clientTypesString,
                     'Facebook': client.facebook || '',
                     'Instagram': client.instagram || '',
-                    'Twitter': client.twitter || '',
+                    'LinkedIn': client.linkedin || '',
                     'Website': client.website || '',
                     'Notes': client.notes || '',
                     'Created Date': client.createdAt || '',
@@ -584,8 +584,8 @@
             if (client.instagram) {
                 vcard += `URL:${this.escapeVCard(client.instagram)}\n`;
             }
-            if (client.twitter) {
-                vcard += `URL:${this.escapeVCard(client.twitter)}\n`;
+            if (client.linkedin) {
+                vcard += `URL:${this.escapeVCard(client.linkedin)}\n`;
             }
 
             // Notes
