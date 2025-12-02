@@ -28,6 +28,8 @@
             // Clients bulk operations
             document.getElementById('bulk-export-clients-btn')?.addEventListener('click', () => this.bulkExportClients());
             document.getElementById('bulk-export-vcf-btn')?.addEventListener('click', () => this.bulkExportVCF());
+            document.getElementById('bulk-import-vcf-btn')?.addEventListener('click', () => this.bulkImportVCF());
+            document.getElementById('bulk-import-xls-btn')?.addEventListener('click', () => this.bulkImportXLS());
             document.getElementById('bulk-delete-clients-btn')?.addEventListener('click', () => this.bulkDeleteClients());
             document.getElementById('bulk-update-type-btn')?.addEventListener('click', () => this.bulkUpdateClientType());
 
@@ -62,6 +64,10 @@
             const container = document.getElementById('clients-bulk-list');
             if (!container) return;
 
+            // Save scroll position before re-render
+            const scrollContainer = container.querySelector('div[style*="overflow-y"]');
+            const scrollTop = scrollContainer?.scrollTop || 0;
+
             const clients = window.SmartAgenda.DataManager.getAll('clients');
 
             if (clients.length === 0) {
@@ -80,10 +86,16 @@
                     <button id="select-inverse-clients" style="padding: 4px 12px; font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; color: var(--text-primary);">Select Inverse</button>
                     <span style="margin-left: auto; color: var(--text-secondary); font-size: 13px;">${this.selectedClients.size} selected</span>
                 </div>
-                <div style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px;">
+                <div id="clients-scroll-container" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px;">
                     ${clients.map(client => this.renderClientCheckboxItem(client)).join('')}
                 </div>
             `;
+
+            // Restore scroll position after re-render
+            const newScrollContainer = document.getElementById('clients-scroll-container');
+            if (newScrollContainer && scrollTop > 0) {
+                newScrollContainer.scrollTop = scrollTop;
+            }
 
             // Bind select all (toggle)
             document.getElementById('select-all-clients')?.addEventListener('change', (e) => {
@@ -137,6 +149,10 @@
             const container = document.getElementById('appointments-bulk-list');
             if (!container) return;
 
+            // Save scroll position before re-render
+            const scrollContainer = container.querySelector('div[style*="overflow-y"]');
+            const scrollTop = scrollContainer?.scrollTop || 0;
+
             const appointments = window.SmartAgenda.DataManager.getAll('appointments');
 
             if (appointments.length === 0) {
@@ -155,10 +171,16 @@
                     <button id="select-inverse-appointments" style="padding: 4px 12px; font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; color: var(--text-primary);">Select Inverse</button>
                     <span style="margin-left: auto; color: var(--text-secondary); font-size: 13px;">${this.selectedAppointments.size} selected</span>
                 </div>
-                <div style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px;">
+                <div id="appointments-scroll-container" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px;">
                     ${appointments.map(apt => this.renderAppointmentCheckboxItem(apt)).join('')}
                 </div>
             `;
+
+            // Restore scroll position after re-render
+            const newScrollContainer = document.getElementById('appointments-scroll-container');
+            if (newScrollContainer && scrollTop > 0) {
+                newScrollContainer.scrollTop = scrollTop;
+            }
 
             // Bind select all (toggle)
             document.getElementById('select-all-appointments')?.addEventListener('change', (e) => {
@@ -726,27 +748,31 @@
                     {
                         label: 'Cancel',
                         type: 'secondary',
+                        action: 'cancel',
                         onClick: (modal) => window.SmartAgenda.UIComponents.closeModal(modal)
                     },
                     {
                         label: 'Update',
                         type: 'primary',
+                        action: 'update',
                         onClick: (modal) => {
                             const select = document.getElementById('bulk-client-type-select');
                             const newTypeId = select.value;
 
+                            let updated = 0;
                             this.selectedClients.forEach(clientId => {
-                                const client = window.SmartAgenda.DataManager.get('clients', clientId);
+                                const client = window.SmartAgenda.DataManager.getById('clients', clientId);
                                 if (client) {
                                     window.SmartAgenda.DataManager.update('clients', clientId, {
                                         clientTypes: [newTypeId],
                                         primaryType: newTypeId
                                     });
+                                    updated++;
                                 }
                             });
 
                             window.SmartAgenda.UIComponents.closeModal(modal);
-                            window.SmartAgenda.Toast.success(`Updated ${this.selectedClients.size} clients`);
+                            window.SmartAgenda.Toast.success(`Updated ${updated} client(s)`);
                             this.selectedClients.clear();
                             this.render();
                         }
@@ -861,6 +887,364 @@
             this.selectedAppointments.clear();
             window.SmartAgenda.Toast.success(`Deleted ${count} appointments`);
             this.render();
+        },
+
+        // ============================================
+        // VCF Import Functionality
+        // ============================================
+
+        bulkImportVCF: function() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.vcf';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = async (event) => {
+                        try {
+                            const vcfContent = event.target.result;
+                            await this.parseAndImportVCF(vcfContent);
+                        } catch (error) {
+                            window.SmartAgenda.Toast.error('Error importing VCF file: ' + error.message);
+                            console.error('VCF import error:', error);
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+        },
+
+        parseAndImportVCF: async function(vcfContent) {
+            // Parse VCF content
+            const contacts = this.parseVCF(vcfContent);
+
+            if (contacts.length === 0) {
+                window.SmartAgenda.Toast.warning('No contacts found in VCF file');
+                return;
+            }
+
+            // Check for duplicates
+            const existingClients = window.SmartAgenda.DataManager.getAll('clients');
+            const duplicates = [];
+            const newContacts = [];
+
+            contacts.forEach(contact => {
+                const duplicate = existingClients.find(client =>
+                    this.normalizeString(client.name) === this.normalizeString(contact.name)
+                );
+
+                if (duplicate) {
+                    duplicates.push({
+                        imported: contact,
+                        existing: duplicate
+                    });
+                } else {
+                    newContacts.push(contact);
+                }
+            });
+
+            // Import new contacts immediately
+            let importedCount = 0;
+            newContacts.forEach(contact => {
+                const client = this.vcfContactToClient(contact);
+                window.SmartAgenda.DataManager.add('clients', client);
+                importedCount++;
+            });
+
+            // Handle duplicates if any
+            if (duplicates.length > 0) {
+                await this.handleDuplicateContacts(duplicates);
+                importedCount += duplicates.length;
+            }
+
+            window.SmartAgenda.Toast.success(`Imported ${importedCount} contact(s) from VCF`);
+            this.render();
+        },
+
+        parseVCF: function(vcfContent) {
+            const contacts = [];
+            const vCards = vcfContent.split('BEGIN:VCARD');
+
+            vCards.forEach(vCardText => {
+                if (!vCardText.trim()) return;
+
+                const contact = {
+                    name: '',
+                    phone: '',
+                    phone2: '',
+                    email: '',
+                    email2: '',
+                    address: '',
+                    city: '',
+                    notes: '',
+                    website: ''
+                };
+
+                const lines = vCardText.split('\n');
+                let phoneCount = 0;
+                let emailCount = 0;
+
+                lines.forEach(line => {
+                    line = line.trim();
+
+                    // Parse name (FN = Formatted Name)
+                    if (line.startsWith('FN:')) {
+                        contact.name = this.unescapeVCard(line.substring(3));
+                    }
+
+                    // Parse phone numbers
+                    if (line.startsWith('TEL')) {
+                        const phoneMatch = line.match(/TEL[^:]*:(.*)/);
+                        if (phoneMatch) {
+                            const phone = this.unescapeVCard(phoneMatch[1]);
+                            if (phoneCount === 0) {
+                                contact.phone = phone;
+                                const typeMatch = line.match(/TYPE=([^:;]+)/i);
+                                if (typeMatch) {
+                                    contact.phoneType = typeMatch[1].toLowerCase();
+                                }
+                            } else if (phoneCount === 1) {
+                                contact.phone2 = phone;
+                                const typeMatch = line.match(/TYPE=([^:;]+)/i);
+                                if (typeMatch) {
+                                    contact.phone2Type = typeMatch[1].toLowerCase();
+                                }
+                            }
+                            phoneCount++;
+                        }
+                    }
+
+                    // Parse email addresses
+                    if (line.startsWith('EMAIL')) {
+                        const emailMatch = line.match(/EMAIL[^:]*:(.*)/);
+                        if (emailMatch) {
+                            const email = this.unescapeVCard(emailMatch[1]);
+                            if (emailCount === 0) {
+                                contact.email = email;
+                                const typeMatch = line.match(/TYPE=([^:;]+)/i);
+                                if (typeMatch) {
+                                    contact.emailType = typeMatch[1].toLowerCase();
+                                }
+                            } else if (emailCount === 1) {
+                                contact.email2 = email;
+                                const typeMatch = line.match(/TYPE=([^:;]+)/i);
+                                if (typeMatch) {
+                                    contact.email2Type = typeMatch[1].toLowerCase();
+                                }
+                            }
+                            emailCount++;
+                        }
+                    }
+
+                    // Parse address
+                    if (line.startsWith('ADR')) {
+                        const adrMatch = line.match(/ADR[^:]*:([^;]*;[^;]*;)?([^;]*);([^;]*)/);
+                        if (adrMatch) {
+                            if (adrMatch[2]) contact.address = this.unescapeVCard(adrMatch[2]);
+                            if (adrMatch[3]) contact.city = this.unescapeVCard(adrMatch[3]);
+                        }
+                    }
+
+                    // Parse notes
+                    if (line.startsWith('NOTE:')) {
+                        contact.notes = this.unescapeVCard(line.substring(5));
+                    }
+
+                    // Parse URL/Website
+                    if (line.startsWith('URL:')) {
+                        const url = this.unescapeVCard(line.substring(4));
+                        if (!contact.website) {
+                            contact.website = url;
+                        }
+                    }
+                });
+
+                // Only add contact if it has at least a name
+                if (contact.name) {
+                    contacts.push(contact);
+                }
+            });
+
+            return contacts;
+        },
+
+        unescapeVCard: function(text) {
+            if (!text) return '';
+            return text
+                .replace(/\\n/g, '\n')
+                .replace(/\\,/g, ',')
+                .replace(/\\;/g, ';')
+                .trim();
+        },
+
+        vcfContactToClient: function(contact) {
+            return {
+                id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
+                name: contact.name,
+                phone: contact.phone,
+                phoneType: contact.phoneType || 'personal',
+                phone2: contact.phone2,
+                phone2Type: contact.phone2Type || 'home',
+                email: contact.email,
+                emailType: contact.emailType || 'work',
+                email2: contact.email2,
+                email2Type: contact.email2Type || 'personal',
+                address: contact.address,
+                city: contact.city,
+                notes: contact.notes,
+                website: contact.website,
+                clientTypes: ['existing'],
+                primaryType: 'existing',
+                date: new Date().toISOString(),
+                createdAt: new Date().toISOString()
+            };
+        },
+
+        handleDuplicateContacts: async function(duplicates) {
+            for (const dup of duplicates) {
+                const choice = await this.showDuplicateDialog(dup);
+
+                if (choice === 'keep-existing') {
+                    // Do nothing, keep existing
+                    continue;
+                } else if (choice === 'keep-imported') {
+                    // Replace existing with imported
+                    const newClient = this.vcfContactToClient(dup.imported);
+                    newClient.id = dup.existing.id; // Keep same ID
+                    window.SmartAgenda.DataManager.update('clients', dup.existing.id, newClient);
+                } else if (choice === 'merge') {
+                    // Merge: keep existing data, add missing fields from imported
+                    const merged = { ...dup.existing };
+                    if (!merged.phone && dup.imported.phone) merged.phone = dup.imported.phone;
+                    if (!merged.phone2 && dup.imported.phone2) merged.phone2 = dup.imported.phone2;
+                    if (!merged.email && dup.imported.email) merged.email = dup.imported.email;
+                    if (!merged.email2 && dup.imported.email2) merged.email2 = dup.imported.email2;
+                    if (!merged.address && dup.imported.address) merged.address = dup.imported.address;
+                    if (!merged.city && dup.imported.city) merged.city = dup.imported.city;
+                    if (!merged.website && dup.imported.website) merged.website = dup.imported.website;
+                    if (!merged.notes && dup.imported.notes) merged.notes = dup.imported.notes;
+
+                    window.SmartAgenda.DataManager.update('clients', dup.existing.id, merged);
+                }
+            }
+        },
+
+        showDuplicateDialog: function(duplicate) {
+            return new Promise((resolve) => {
+                const existingInfo = `
+                    <strong>Existing Contact:</strong><br>
+                    Name: ${this.escapeHtml(duplicate.existing.name)}<br>
+                    Phone: ${this.escapeHtml(duplicate.existing.phone || 'N/A')}<br>
+                    Email: ${this.escapeHtml(duplicate.existing.email || 'N/A')}<br>
+                    Source: <em>In Memory</em>
+                `;
+
+                const importedInfo = `
+                    <strong>Imported Contact:</strong><br>
+                    Name: ${this.escapeHtml(duplicate.imported.name)}<br>
+                    Phone: ${this.escapeHtml(duplicate.imported.phone || 'N/A')}<br>
+                    Email: ${this.escapeHtml(duplicate.imported.email || 'N/A')}<br>
+                    Source: <em>VCF Import</em>
+                `;
+
+                const content = `
+                    <div style="margin-bottom: 16px;">
+                        <p style="margin-bottom: 12px; font-weight: 600; color: var(--warning-color);">
+                            Duplicate contact detected!
+                        </p>
+                        <div style="padding: 12px; background: var(--background); border-radius: 6px; margin-bottom: 12px;">
+                            ${existingInfo}
+                        </div>
+                        <div style="padding: 12px; background: var(--background); border-radius: 6px;">
+                            ${importedInfo}
+                        </div>
+                        <p style="margin-top: 12px; font-size: 14px; color: var(--text-secondary);">
+                            Which version would you like to keep?
+                        </p>
+                    </div>
+                `;
+
+                const modal = window.SmartAgenda.UIComponents.showModal({
+                    title: 'Duplicate Contact Found',
+                    content: content,
+                    buttons: [
+                        {
+                            label: 'Keep Existing',
+                            type: 'secondary',
+                            onClick: () => {
+                                window.SmartAgenda.UIComponents.closeModal(modal);
+                                resolve('keep-existing');
+                            }
+                        },
+                        {
+                            label: 'Keep Imported',
+                            type: 'primary',
+                            onClick: () => {
+                                window.SmartAgenda.UIComponents.closeModal(modal);
+                                resolve('keep-imported');
+                            }
+                        },
+                        {
+                            label: 'Merge Both',
+                            type: 'success',
+                            onClick: () => {
+                                window.SmartAgenda.UIComponents.closeModal(modal);
+                                resolve('merge');
+                            }
+                        }
+                    ]
+                });
+            });
+        },
+
+        normalizeString: function(str) {
+            if (!str) return '';
+            return str.toLowerCase().trim();
+        },
+
+        // ============================================
+        // XLS Import Placeholder
+        // ============================================
+
+        bulkImportXLS: function() {
+            window.SmartAgenda.Toast.info('Excel import feature coming soon! This will intelligently read any Excel file with customer data.');
+
+            // Show info modal
+            const content = `
+                <div style="padding: 16px;">
+                    <p style="margin-bottom: 12px;">
+                        <strong>Excel Import (Coming Soon)</strong>
+                    </p>
+                    <p style="margin-bottom: 12px; color: var(--text-secondary);">
+                        This feature will allow you to import contacts from any Excel file format.
+                        The system will intelligently detect columns for:
+                    </p>
+                    <ul style="color: var(--text-secondary); margin-left: 20px;">
+                        <li>Names</li>
+                        <li>Phone numbers</li>
+                        <li>Email addresses</li>
+                        <li>Addresses</li>
+                        <li>Custom fields</li>
+                    </ul>
+                    <p style="margin-top: 12px; color: var(--text-secondary);">
+                        Stay tuned for this powerful feature!
+                    </p>
+                </div>
+            `;
+
+            window.SmartAgenda.UIComponents.showModal({
+                title: 'Excel Import',
+                content: content,
+                buttons: [
+                    {
+                        label: 'OK',
+                        type: 'primary',
+                        onClick: (modal) => window.SmartAgenda.UIComponents.closeModal(modal)
+                    }
+                ]
+            });
         },
 
         // ============================================

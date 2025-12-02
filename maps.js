@@ -59,8 +59,9 @@
         // UI state
         infoWindow: null,
         isInitialized: false,
-        currentFilter: 'all',
-        currentTypeFilter: 'all', // For filtering client types on map
+        currentFilter: 'all', // 'all' or array of type IDs
+        currentTypeFilter: 'all', // For filtering client types on map (deprecated, using currentFilter now)
+        filterMode: 'or', // 'or', 'and', or 'or-and' - how to combine multiple filters
 
         // Offline cache
         offlineCache: {
@@ -490,13 +491,47 @@
             console.log('[Maps] Total clients in database:', clients.length);
 
             // Apply type filter if not 'all'
-            if (this.currentTypeFilter !== 'all') {
+            if (this.currentFilter !== 'all' && Array.isArray(this.currentFilter) && this.currentFilter.length > 0) {
+                const selectedTypes = this.currentFilter;
                 clients = clients.filter(client => {
+                    let clientTypesList = [];
+
                     // Support new clientTypes array
+                    if (client.clientTypes && Array.isArray(client.clientTypes)) {
+                        clientTypesList = client.clientTypes;
+                    } else if (client.customerType) {
+                        clientTypesList = [client.customerType];
+                    }
+
+                    if (clientTypesList.length === 0) return false;
+
+                    // Apply filter logic based on mode
+                    if (this.filterMode === 'and') {
+                        // AND: client must have ALL selected types
+                        return selectedTypes.every(typeId => clientTypesList.includes(typeId));
+                    } else if (this.filterMode === 'or-and') {
+                        // OR+AND: First 2 types use OR, rest use AND
+                        const firstTwo = selectedTypes.slice(0, 2);
+                        const rest = selectedTypes.slice(2);
+
+                        // Client must have at least one of the first two
+                        const hasFirstTwo = firstTwo.length === 0 || firstTwo.some(typeId => clientTypesList.includes(typeId));
+
+                        // Client must have all of the rest
+                        const hasRest = rest.every(typeId => clientTypesList.includes(typeId));
+
+                        return hasFirstTwo && hasRest;
+                    } else {
+                        // OR: client must have AT LEAST ONE of the selected types
+                        return selectedTypes.some(typeId => clientTypesList.includes(typeId));
+                    }
+                });
+            } else if (this.currentTypeFilter !== 'all') {
+                // Legacy support for single currentTypeFilter
+                clients = clients.filter(client => {
                     if (client.clientTypes && Array.isArray(client.clientTypes)) {
                         return client.clientTypes.includes(this.currentTypeFilter);
                     }
-                    // Support old customerType field
                     return client.customerType === this.currentTypeFilter;
                 });
             }
@@ -873,15 +908,23 @@
 
             const content = `
                 <div style="padding: 16px;">
-                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Location Notes for ${client.name}</label>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Location Notes for ${this.escapeHtml(client.name)}</label>
                     <textarea id="location-notes-input"
                               style="width: 100%; min-height: 100px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; resize: vertical; font-family: inherit; background: var(--background); color: var(--text-primary);"
-                              placeholder="e.g., Gate code: 1234, Park on the left, Ring twice...">${this.escapeHtml(currentNotes)}</textarea>
+                              placeholder="e.g., Gate code: 1234, Park on the left, Ring twice..."></textarea>
                     <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
                         Add parking instructions, gate codes, or access notes
                     </div>
                 </div>
             `;
+
+            // Set textarea value after modal is created to avoid escaping issues
+            setTimeout(() => {
+                const textarea = document.getElementById('location-notes-input');
+                if (textarea) {
+                    textarea.value = currentNotes;
+                }
+            }, 50);
 
             const modal = window.SmartAgenda.UIComponents.showModal({
                 title: '📝 Location Notes',
@@ -890,11 +933,13 @@
                     {
                         label: 'Cancel',
                         type: 'secondary',
+                        action: 'cancel',
                         onClick: (modal) => window.SmartAgenda.UIComponents.closeModal(modal)
                     },
                     {
                         label: 'Save',
                         type: 'primary',
+                        action: 'save',
                         onClick: (modal) => {
                             const notes = document.getElementById('location-notes-input')?.value || '';
                             window.SmartAgenda.DataManager.update('clients', clientId, {
@@ -902,6 +947,16 @@
                             });
                             window.SmartAgenda.Toast.success('Location notes saved');
                             window.SmartAgenda.UIComponents.closeModal(modal);
+
+                            // Refresh the marker info window to show the updated notes
+                            const updatedClient = window.SmartAgenda.DataManager.getById('clients', clientId);
+                            if (updatedClient) {
+                                const marker = this.clientMarkers.find(m => m.clientId === clientId);
+                                if (marker && this.infoWindow) {
+                                    const content = this.createClientInfoContent(updatedClient);
+                                    this.infoWindow.setContent(content);
+                                }
+                            }
                         }
                     }
                 ],
@@ -1384,19 +1439,80 @@
         showMapFilter: function() {
             const availableTypes = window.SmartAgenda.Settings?.getClientTypes() || [];
 
+            // Get all clients and count by type
+            const allClients = window.SmartAgenda.DataManager.getAll('clients');
+            const totalCount = allClients.length;
+
+            // Count clients per type
+            const typeCounts = {};
+            typeCounts['all'] = totalCount;
+            availableTypes.forEach(type => {
+                typeCounts[type.id] = allClients.filter(client => {
+                    if (client.clientTypes && Array.isArray(client.clientTypes)) {
+                        return client.clientTypes.includes(type.id);
+                    }
+                    return client.customerType === type.id;
+                }).length;
+            });
+
+            // Determine selected types
+            const selectedTypes = this.currentFilter === 'all' ? [] : (Array.isArray(this.currentFilter) ? this.currentFilter : []);
+
             const content = `
-                <div class="filter-menu">
-                    <div class="filter-option ${this.currentTypeFilter === 'all' ? 'active' : ''}" data-filter="all"
-                         style="padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--border-radius-sm); cursor: pointer; margin-bottom: 8px; transition: all 0.2s;">
-                        <span>All Client Types</span>
-                    </div>
-                    ${availableTypes.map(type => `
-                        <div class="filter-option ${this.currentTypeFilter === type.id ? 'active' : ''}" data-filter="${type.id}"
-                             style="padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--border-radius-sm); cursor: pointer; margin-bottom: 8px; transition: all 0.2s; display: flex; align-items: center;">
-                            <div style="width: 16px; height: 16px; border-radius: 50%; background: ${type.color}; margin-right: 8px;"></div>
-                            <span>${this.escapeHtml(type.name)}</span>
+                <div class="filter-menu" style="padding: 16px;">
+                    <!-- Explanation -->
+                    <div style="margin-bottom: 16px; padding: 12px; background: var(--surface); border-radius: 6px; font-size: 12px; color: var(--text-secondary);">
+                        <div style="margin-bottom: 8px;"><strong>Filter Modes:</strong></div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div>
+                                <div style="margin-bottom: 2px;"><span style="font-size: 16px;">⭕</span> <strong>OR</strong></div>
+                                <div style="font-size: 11px;">Show clients with ANY of the selected types</div>
+                            </div>
+                            <div>
+                                <div style="margin-bottom: 2px;"><span style="font-size: 16px;">⬜</span> <strong>AND</strong></div>
+                                <div style="font-size: 11px;">Show clients with ALL selected types</div>
+                            </div>
+                            <div>
+                                <div style="margin-bottom: 2px;"><span style="font-size: 16px;">🔀</span> <strong>OR+AND</strong></div>
+                                <div style="font-size: 11px;">First 2 types use OR, rest use AND</div>
+                            </div>
                         </div>
-                    `).join('')}
+                    </div>
+
+                    <!-- Filter Mode Buttons -->
+                    <div style="display: flex; gap: 6px; margin-bottom: 16px;">
+                        <button id="filter-mode-or" class="btn-${this.filterMode === 'or' ? 'primary' : 'secondary'}" style="flex: 1; padding: 6px; font-size: 12px;">
+                            <span style="font-size: 14px; margin-right: 2px;">⭕</span>
+                            <span>OR</span>
+                        </button>
+                        <button id="filter-mode-and" class="btn-${this.filterMode === 'and' ? 'primary' : 'secondary'}" style="flex: 1; padding: 6px; font-size: 12px;">
+                            <span style="font-size: 14px; margin-right: 2px;">⬜</span>
+                            <span>AND</span>
+                        </button>
+                        <button id="filter-mode-or-and" class="btn-${this.filterMode === 'or-and' ? 'primary' : 'secondary'}" style="flex: 1; padding: 6px; font-size: 12px;">
+                            <span style="font-size: 14px; margin-right: 2px;">🔀</span>
+                            <span>OR+AND</span>
+                        </button>
+                    </div>
+
+                    <!-- All Clients Option -->
+                    <div class="filter-option" data-filter="all" style="display: flex; align-items: center; padding: 12px; margin-bottom: 8px; cursor: pointer; border-radius: 6px; background: ${this.currentFilter === 'all' ? 'var(--primary-color)22' : 'var(--surface)'}; border: 1px solid ${this.currentFilter === 'all' ? 'var(--primary-color)' : 'var(--border)'};">
+                        <input type="radio" name="filter-all" ${this.currentFilter === 'all' ? 'checked' : ''} style="margin-right: 12px; cursor: pointer;">
+                        <span style="flex: 1; font-weight: 500;">All Clients</span>
+                        <span style="color: var(--text-secondary); font-size: 13px;">${typeCounts['all']}</span>
+                    </div>
+
+                    <!-- Client Types -->
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        ${availableTypes.map(type => `
+                            <div class="filter-type-option" data-type-id="${type.id}" style="display: flex; align-items: center; padding: 12px; margin-bottom: 8px; cursor: pointer; border-radius: 6px; background: ${selectedTypes.includes(type.id) ? 'var(--primary-color)22' : 'var(--surface)'}; border: 1px solid ${selectedTypes.includes(type.id) ? 'var(--primary-color)' : 'var(--border)'};">
+                                <input type="checkbox" ${selectedTypes.includes(type.id) ? 'checked' : ''} style="margin-right: 12px; cursor: pointer;">
+                                <div style="width: 16px; height: 16px; border-radius: 50%; background: ${type.color}; margin-right: 12px;"></div>
+                                <span style="flex: 1;">${this.escapeHtml(type.name)}</span>
+                                <span style="color: var(--text-secondary); font-size: 13px;">${typeCounts[type.id] || 0}</span>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
             `;
 
@@ -1405,44 +1521,120 @@
                 content: content,
                 buttons: [
                     {
-                        label: 'Close',
+                        label: 'Cancel',
                         type: 'secondary',
+                        action: 'cancel',
                         onClick: (modal) => window.SmartAgenda.UIComponents.closeModal(modal)
+                    },
+                    {
+                        label: 'Apply Filter',
+                        type: 'primary',
+                        action: 'apply',
+                        onClick: (modal) => {
+                            this.refreshClientMarkers();
+                            window.SmartAgenda.UIComponents.closeModal(modal);
+
+                            const count = this.currentFilter === 'all' ? totalCount : selectedTypes.length;
+                            window.SmartAgenda.Toast.success(`Filter applied (${this.filterMode.toUpperCase()} mode)`);
+                        }
                     }
                 ],
-                size: 'small'
+                size: 'medium'
             });
 
-            // Bind filter options
-            modal.querySelectorAll('.filter-option').forEach(option => {
-                option.addEventListener('click', () => {
-                    this.currentTypeFilter = option.dataset.filter;
-                    this.refreshClientMarkers();
-                    window.SmartAgenda.UIComponents.closeModal(modal);
+            // Bind filter mode buttons
+            const orButton = modal.querySelector('#filter-mode-or');
+            const andButton = modal.querySelector('#filter-mode-and');
+            const orAndButton = modal.querySelector('#filter-mode-or-and');
 
-                    const filterText = option.dataset.filter === 'all' ? 'all types' : option.querySelector('span').textContent;
-                    window.SmartAgenda.Toast.success(`Showing ${filterText}`);
-                });
+            orButton?.addEventListener('click', () => {
+                this.filterMode = 'or';
+                orButton.className = 'btn-primary';
+                andButton.className = 'btn-secondary';
+                orAndButton.className = 'btn-secondary';
+            });
 
-                // Hover effect
-                option.addEventListener('mouseenter', function() {
-                    if (!this.classList.contains('active')) {
-                        this.style.background = 'var(--surface-hover)';
-                    }
-                });
+            andButton?.addEventListener('click', () => {
+                this.filterMode = 'and';
+                andButton.className = 'btn-primary';
+                orButton.className = 'btn-secondary';
+                orAndButton.className = 'btn-secondary';
+            });
 
-                option.addEventListener('mouseleave', function() {
-                    if (!this.classList.contains('active')) {
-                        this.style.background = 'transparent';
-                    }
+            orAndButton?.addEventListener('click', () => {
+                this.filterMode = 'or-and';
+                orAndButton.className = 'btn-primary';
+                orButton.className = 'btn-secondary';
+                andButton.className = 'btn-secondary';
+            });
+
+            // Bind "All Clients" option
+            const allOption = modal.querySelector('[data-filter="all"]');
+            allOption?.addEventListener('click', () => {
+                this.currentFilter = 'all';
+                this.currentTypeFilter = 'all';
+                modal.querySelector('[name="filter-all"]').checked = true;
+
+                // Uncheck all type checkboxes
+                modal.querySelectorAll('.filter-type-option input[type="checkbox"]').forEach(cb => cb.checked = false);
+
+                // Update styling
+                allOption.style.background = 'var(--primary-color)22';
+                allOption.style.borderColor = 'var(--primary-color)';
+                modal.querySelectorAll('.filter-type-option').forEach(opt => {
+                    opt.style.background = 'var(--surface)';
+                    opt.style.borderColor = 'var(--border)';
                 });
             });
 
-            // Highlight active option
-            modal.querySelectorAll('.filter-option.active').forEach(opt => {
-                opt.style.background = 'var(--primary-color)';
-                opt.style.color = 'white';
-                opt.style.borderColor = 'var(--primary-color)';
+            // Bind type filter options (checkboxes for multiple selection)
+            modal.querySelectorAll('.filter-type-option').forEach(option => {
+                option.addEventListener('click', (e) => {
+                    if (e.target.type === 'checkbox') return; // Let checkbox handle itself
+
+                    const checkbox = option.querySelector('input[type="checkbox"]');
+                    checkbox.checked = !checkbox.checked;
+
+                    const typeId = option.dataset.typeId;
+                    let newSelectedTypes = [...selectedTypes];
+
+                    if (checkbox.checked) {
+                        if (!newSelectedTypes.includes(typeId)) {
+                            newSelectedTypes.push(typeId);
+                        }
+                    } else {
+                        newSelectedTypes = newSelectedTypes.filter(id => id !== typeId);
+                    }
+
+                    // Update current filter
+                    if (newSelectedTypes.length === 0) {
+                        this.currentFilter = 'all';
+                        this.currentTypeFilter = 'all';
+                        modal.querySelector('[name="filter-all"]').checked = true;
+                    } else {
+                        this.currentFilter = newSelectedTypes;
+                        this.currentTypeFilter = newSelectedTypes[0]; // Set first one for legacy
+                        modal.querySelector('[name="filter-all"]').checked = false;
+                    }
+
+                    // Update styling
+                    if (checkbox.checked) {
+                        option.style.background = 'var(--primary-color)22';
+                        option.style.borderColor = 'var(--primary-color)';
+                    } else {
+                        option.style.background = 'var(--surface)';
+                        option.style.borderColor = 'var(--border)';
+                    }
+
+                    // Update "All" option styling
+                    if (this.currentFilter === 'all') {
+                        allOption.style.background = 'var(--primary-color)22';
+                        allOption.style.borderColor = 'var(--primary-color)';
+                    } else {
+                        allOption.style.background = 'var(--surface)';
+                        allOption.style.borderColor = 'var(--border)';
+                    }
+                });
             });
         },
 

@@ -53,104 +53,37 @@
             // Add button
             this.addButton?.addEventListener('click', () => this.showClientModal());
 
-            // Real-time search with VALUE POLLING for Android Greek keyboard compatibility
-            // Android Greek keyboards don't fire events while typing - characters stay in composition buffer
-            // Solution: Poll input.value every 200ms to detect changes
+            // Search with proper IME composition support for Greek keyboard
             let searchTimeout = null;
-            let lastValue = '';
-            let pollInterval = null;
-            let isProcessing = false; // Prevent overlapping searches
+            let isComposing = false;
 
-            // Helper function to trigger search
-            const triggerSearch = (eventType) => {
-                // Skip if already processing
-                if (isProcessing) return;
-
-                const currentValue = this.searchInput.value;
-
-                // Skip if value hasn't changed
-                if (currentValue === lastValue) return;
-
-                console.log(`[Search] ${eventType} triggered - Value:`, currentValue, 'Length:', currentValue.length);
-
-                if (currentValue) {
-                    const charCodes = Array.from(currentValue).map((char) =>
-                        `${char}(${char.charCodeAt(0)})`
-                    ).join(' ');
-                    console.log('[Search] Character codes:', charCodes);
-                }
-
-                lastValue = currentValue;
-                this.searchQuery = currentValue;
-                this.hasSearched = true;
-                this.updateSearchUI();
-
-                // Set processing flag before render
-                isProcessing = true;
-                requestAnimationFrame(() => {
-                    this.render();
-                    isProcessing = false;
-                });
-            };
-
-            // Start polling when input is focused
-            this.searchInput?.addEventListener('focus', () => {
-                console.log('[Search] Focus - starting polling');
-                lastValue = this.searchInput.value;
-
-                // Clear any existing interval
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                }
-
-                // Poll every 200ms to catch uncommitted composition buffer text
-                pollInterval = setInterval(() => {
-                    // Skip polling if input is not focused
-                    if (document.activeElement !== this.searchInput) {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
-                        return;
-                    }
-
-                    const currentValue = this.searchInput.value;
-                    if (currentValue !== lastValue) {
-                        console.log('[Search] Polling detected change:', currentValue);
-                        // Only schedule new search if one isn't already pending
-                        if (!searchTimeout) {
-                            searchTimeout = setTimeout(() => {
-                                triggerSearch('polling');
-                                searchTimeout = null;
-                            }, 300);
-                        }
-                    }
-                }, 200);
+            // Track composition state
+            this.searchInput?.addEventListener('compositionstart', () => {
+                isComposing = true;
             });
 
-            // Stop polling when input loses focus
-            this.searchInput?.addEventListener('blur', () => {
-                console.log('[Search] Blur - stopping polling');
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                    pollInterval = null;
-                }
-                // Clear any pending search
-                if (searchTimeout) {
-                    clearTimeout(searchTimeout);
-                    searchTimeout = null;
-                }
-                // Trigger final search on blur only if value changed
-                if (this.searchInput.value !== lastValue) {
-                    triggerSearch('blur');
-                }
-            });
-
-            // Keep standard events as fallback for browsers where they work
-            this.searchInput?.addEventListener('input', (e) => {
-                console.log('[Search] Input event fired');
+            this.searchInput?.addEventListener('compositionend', (e) => {
+                isComposing = false;
+                // Trigger search after composition ends
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
-                    triggerSearch('input');
-                    searchTimeout = null;
+                    this.searchQuery = this.searchInput.value;
+                    this.hasSearched = true;
+                    this.updateSearchUI();
+                    this.render();
+                }, 100);
+            });
+
+            this.searchInput?.addEventListener('input', (e) => {
+                // Skip if composing (wait for compositionend)
+                if (isComposing) return;
+
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.searchQuery = this.searchInput.value;
+                    this.hasSearched = true;
+                    this.updateSearchUI();
+                    this.render();
                 }, 300);
             });
 
@@ -363,10 +296,17 @@
                 details = client.address;
             }
 
+            // Build contact name display
+            let contactNameDisplay = '';
+            if (client.contactName) {
+                contactNameDisplay = `<div class="contact-person" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">👤 ${this.escapeHtml(client.contactName)}</div>`;
+            }
+
             card.innerHTML = `
                 <div class="contact-avatar" style="background: ${avatarColor}; color: white;">${initial}</div>
                 <div class="contact-info">
                     <div class="contact-name">${this.escapeHtml(client.name)}</div>
+                    ${contactNameDisplay}
                     ${details ? `<div class="contact-details">${this.escapeHtml(details)}</div>` : ''}
                 </div>
                 ${primaryType ? `<span class="contact-type-badge" style="background: ${primaryType.color}22; color: ${primaryType.color}; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">${this.escapeHtml(primaryType.name.substring(0, 3))}</span>` : ''}
@@ -438,6 +378,12 @@
                     type: 'text',
                     required: true,
                     placeholder: 'John Doe'
+                },
+                {
+                    name: 'contactName',
+                    label: 'Contact Person',
+                    type: 'text',
+                    placeholder: 'Contact person name (optional)'
                 },
                 {
                     name: 'phone',
@@ -1344,6 +1290,35 @@
             const email2TypeInput = modal.querySelector('[name="email2Type"]');
             if (email2TypeInput) values.email2Type = email2TypeInput.value;
 
+            // Validate email addresses
+            if (values.email && !this.isValidEmail(values.email)) {
+                window.SmartAgenda.Toast.error('Please enter a valid primary email address');
+                // Highlight the email field
+                const emailInput = modal.querySelector('[name="email"]');
+                if (emailInput) {
+                    emailInput.style.borderColor = 'var(--danger-color)';
+                    emailInput.focus();
+                    setTimeout(() => {
+                        emailInput.style.borderColor = '';
+                    }, 3000);
+                }
+                return;
+            }
+
+            if (values.email2 && !this.isValidEmail(values.email2)) {
+                window.SmartAgenda.Toast.error('Please enter a valid secondary email address');
+                // Highlight the email2 field
+                const email2InputField = modal.querySelector('[name="email2"]');
+                if (email2InputField) {
+                    email2InputField.style.borderColor = 'var(--danger-color)';
+                    email2InputField.focus();
+                    setTimeout(() => {
+                        email2InputField.style.borderColor = '';
+                    }, 3000);
+                }
+                return;
+            }
+
             // Get social media and website fields
             const facebookInput = modal.querySelector('[name="facebook"]');
             if (facebookInput) values.facebook = facebookInput.value;
@@ -1651,6 +1626,20 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        },
+
+        /**
+         * Validate email address format
+         * @param {string} email - Email address to validate
+         * @returns {boolean} True if valid, false otherwise
+         */
+        isValidEmail: function(email) {
+            if (!email) return true; // Empty email is valid (optional field)
+
+            // RFC 5322 compliant email regex (simplified version)
+            const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+            return emailRegex.test(email.trim());
         }
     };
 

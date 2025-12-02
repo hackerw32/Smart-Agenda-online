@@ -358,24 +358,50 @@
         /**
          * Import data from JSON
          * @param {Object} data - Data to import
+         * @param {boolean} merge - If true, merge with existing data; if false, replace all data
          * @returns {boolean} Success status
          */
-        importData: function(data) {
+        importData: function(data, merge = false) {
             try {
-                if (data.clients) {
-                    this.saveAll('clients', data.clients);
-                }
-                if (data.appointments) {
-                    this.saveAll('appointments', data.appointments);
-                }
-                if (data.tasks) {
-                    this.saveAll('tasks', data.tasks);
-                }
-                if (data.categories) {
-                    this.saveAll('categories', data.categories);
+                if (merge) {
+                    // Merge mode: combine backup data with existing data
+                    if (data.clients) {
+                        const existingClients = this.getAll('clients');
+                        const mergedClients = this.mergeArrayData(existingClients, data.clients);
+                        this.saveAll('clients', mergedClients);
+                    }
+                    if (data.appointments) {
+                        const existingAppointments = this.getAll('appointments');
+                        const mergedAppointments = this.mergeArrayData(existingAppointments, data.appointments);
+                        this.saveAll('appointments', mergedAppointments);
+                    }
+                    if (data.tasks) {
+                        const existingTasks = this.getAll('tasks');
+                        const mergedTasks = this.mergeArrayData(existingTasks, data.tasks);
+                        this.saveAll('tasks', mergedTasks);
+                    }
+                    if (data.categories) {
+                        const existingCategories = this.getAll('categories');
+                        const mergedCategories = this.mergeArrayData(existingCategories, data.categories);
+                        this.saveAll('categories', mergedCategories);
+                    }
+                } else {
+                    // Replace mode: clear existing data and import backup
+                    if (data.clients) {
+                        this.saveAll('clients', data.clients);
+                    }
+                    if (data.appointments) {
+                        this.saveAll('appointments', data.appointments);
+                    }
+                    if (data.tasks) {
+                        this.saveAll('tasks', data.tasks);
+                    }
+                    if (data.categories) {
+                        this.saveAll('categories', data.categories);
+                    }
                 }
 
-                // Import settings
+                // Import settings (always replace, not merge)
                 if (data.settings) {
                     if (data.settings.clientTypes) {
                         localStorage.setItem('clientTypes', data.settings.clientTypes);
@@ -414,7 +440,8 @@
                 // Emit import complete event
                 if (window.SmartAgenda) {
                     window.SmartAgenda.EventBus.emit('data:import:complete');
-                    window.SmartAgenda.Toast.success('Data and settings imported successfully');
+                    const modeText = merge ? 'merged' : 'imported';
+                    window.SmartAgenda.Toast.success(`Data ${modeText} successfully`);
                 }
 
                 return true;
@@ -425,6 +452,65 @@
                 }
                 return false;
             }
+        },
+
+        /**
+         * Merge two arrays of data, keeping existing items and adding new ones
+         * @param {Array} existing - Existing items
+         * @param {Array} imported - Imported items
+         * @returns {Array} Merged array
+         */
+        mergeArrayData: function(existing, imported) {
+            const merged = [...existing];
+            const existingIds = new Set(existing.map(item => item.id));
+
+            imported.forEach(importedItem => {
+                if (!existingIds.has(importedItem.id)) {
+                    // New item, add it
+                    merged.push(importedItem);
+                }
+                // If item exists, keep the existing version (user's current data takes priority)
+            });
+
+            return merged;
+        },
+
+        /**
+         * Find duplicate clients between backup and existing data
+         * @param {Array} backupClients - Clients from backup
+         * @returns {Object} Object with duplicates and newClients arrays
+         */
+        findDuplicateClients: function(backupClients) {
+            const existingClients = this.getAll('clients');
+            const duplicates = [];
+            const newClients = [];
+
+            backupClients.forEach(backupClient => {
+                const duplicate = existingClients.find(existing =>
+                    this.normalizeString(existing.name) === this.normalizeString(backupClient.name)
+                );
+
+                if (duplicate) {
+                    duplicates.push({
+                        existing: duplicate,
+                        imported: backupClient
+                    });
+                } else {
+                    newClients.push(backupClient);
+                }
+            });
+
+            return { duplicates, newClients };
+        },
+
+        /**
+         * Normalize string for comparison
+         * @param {string} str - String to normalize
+         * @returns {string} Normalized string
+         */
+        normalizeString: function(str) {
+            if (!str) return '';
+            return str.toLowerCase().trim();
         },
 
         /**
@@ -441,48 +527,76 @@
                     console.log('Running on native platform');
 
                     try {
-                        // Use Filesystem plugin - Google Play compliant method
+                        // Use Filesystem plugin
                         const Filesystem = window.Capacitor.Plugins.Filesystem;
 
                         if (!Filesystem) {
                             throw new Error('Filesystem plugin not available');
                         }
 
-                        console.log('Using Filesystem plugin for backup export (Share API)...');
+                        // Try to save directly to Downloads folder first
+                        let savedToDownloads = false;
 
-                        // Save to app-specific directory (no special permissions needed)
-                        // Then use Share API to let user choose where to save (Google Play compliant)
-                        const result = await Filesystem.writeFile({
-                            path: 'backups/' + fileName,
-                            data: json,
-                            directory: 'DATA',
-                            encoding: 'utf8',
-                            recursive: true
-                        });
+                        try {
+                            console.log('Attempting to save backup directly to Downloads...');
 
-                        console.log('Backup saved to app data:', result);
-
-                        // Use Share API to let user save the file wherever they want
-                        // This is Google Play's recommended approach - no MANAGE_EXTERNAL_STORAGE needed
-                        const uriResult = await Filesystem.getUri({
-                            path: 'backups/' + fileName,
-                            directory: 'DATA'
-                        });
-
-                        const Share = window.Capacitor.Plugins.Share;
-                        if (Share) {
-                            await Share.share({
-                                title: 'Smart Agenda Backup',
-                                text: 'Save your backup file',
-                                url: uriResult.uri,
-                                dialogTitle: 'Save backup to...'
+                            // Try to write to EXTERNAL/Documents which is accessible on Android 10+
+                            const downloadResult = await Filesystem.writeFile({
+                                path: 'Smart Agenda/' + fileName,
+                                data: json,
+                                directory: 'DOCUMENTS',
+                                encoding: 'utf8',
+                                recursive: true
                             });
 
+                            console.log('Backup saved to Documents:', downloadResult);
+
                             if (window.SmartAgenda) {
-                                window.SmartAgenda.Toast.success('Backup created - choose where to save it');
+                                window.SmartAgenda.Toast.success(`Backup saved to Documents/Smart Agenda/${fileName}`);
                             }
-                        } else {
-                            throw new Error('Share plugin not available');
+
+                            savedToDownloads = true;
+                        } catch (downloadError) {
+                            console.log('Could not save to Documents folder:', downloadError.message);
+                            // Will fall back to Share API below
+                        }
+
+                        // If direct save failed, use Share API as fallback
+                        if (!savedToDownloads) {
+                            console.log('Using Share API as fallback...');
+
+                            // Save to app-specific directory first
+                            const result = await Filesystem.writeFile({
+                                path: 'backups/' + fileName,
+                                data: json,
+                                directory: 'DATA',
+                                encoding: 'utf8',
+                                recursive: true
+                            });
+
+                            console.log('Backup saved to app data:', result);
+
+                            // Get file URI for sharing
+                            const uriResult = await Filesystem.getUri({
+                                path: 'backups/' + fileName,
+                                directory: 'DATA'
+                            });
+
+                            const Share = window.Capacitor.Plugins.Share;
+                            if (Share) {
+                                await Share.share({
+                                    title: 'Smart Agenda Backup',
+                                    text: 'Save your backup file',
+                                    url: uriResult.uri,
+                                    dialogTitle: 'Save backup to...'
+                                });
+
+                                if (window.SmartAgenda) {
+                                    window.SmartAgenda.Toast.success('Backup created - choose where to save it');
+                                }
+                            } else {
+                                throw new Error('Share plugin not available');
+                            }
                         }
 
                     } catch (error) {
@@ -564,6 +678,81 @@
                 }
             } catch (error) {
                 console.error('Error in downloadBackup:', error);
+                if (window.SmartAgenda) {
+                    window.SmartAgenda.Toast.error('Failed to create backup');
+                }
+            }
+        },
+
+        /**
+         * Share backup using Share API only (no Documents folder save attempt)
+         */
+        shareBackup: async function() {
+            try {
+                const data = this.exportData();
+                const json = JSON.stringify(data, null, 2);
+                const fileName = `smart-agenda-backup-${new Date().toISOString().split('T')[0]}.json`;
+
+                // Check if running in Capacitor (mobile app)
+                if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+                    console.log('Running on native platform - using Share API');
+
+                    try {
+                        const Filesystem = window.Capacitor.Plugins.Filesystem;
+
+                        if (!Filesystem) {
+                            throw new Error('Filesystem plugin not available');
+                        }
+
+                        // Save to app-specific directory first
+                        const result = await Filesystem.writeFile({
+                            path: 'backups/' + fileName,
+                            data: json,
+                            directory: 'DATA',
+                            encoding: 'utf8',
+                            recursive: true
+                        });
+
+                        console.log('Backup saved to app data:', result);
+
+                        // Get file URI for sharing
+                        const uriResult = await Filesystem.getUri({
+                            path: 'backups/' + fileName,
+                            directory: 'DATA'
+                        });
+
+                        const Share = window.Capacitor.Plugins.Share;
+                        if (Share) {
+                            await Share.share({
+                                title: 'Smart Agenda Backup',
+                                text: 'Save your backup file',
+                                url: uriResult.uri,
+                                dialogTitle: 'Save backup to...'
+                            });
+
+                            if (window.SmartAgenda) {
+                                window.SmartAgenda.Toast.success('Backup created - choose where to save it');
+                            }
+                        } else {
+                            throw new Error('Share plugin not available');
+                        }
+
+                    } catch (error) {
+                        console.error('Error sharing backup:', error);
+                        if (window.SmartAgenda) {
+                            window.SmartAgenda.Toast.error('Failed to share backup: ' + error.message);
+                        }
+                    }
+                    return;
+                }
+
+                // If not on mobile, show error
+                if (window.SmartAgenda) {
+                    window.SmartAgenda.Toast.error('Share feature only available on mobile app');
+                }
+
+            } catch (error) {
+                console.error('Error in shareBackup:', error);
                 if (window.SmartAgenda) {
                     window.SmartAgenda.Toast.error('Failed to create backup');
                 }

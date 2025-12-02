@@ -40,96 +40,35 @@
             // Add button - creates standalone appointment by default
             this.addButton?.addEventListener('click', () => this.showAppointmentModal());
 
-            // Real-time search with VALUE POLLING for Android Greek keyboard compatibility
-            // Android Greek keyboards don't fire events while typing - characters stay in composition buffer
-            // Solution: Poll input.value every 200ms to detect changes
+            // Search with proper IME composition support for Greek keyboard
             let searchTimeout = null;
-            let lastValue = '';
-            let pollInterval = null;
-            let isProcessing = false; // Prevent overlapping searches
+            let isComposing = false;
 
-            // Helper function to trigger search
-            const triggerSearch = (eventType) => {
-                // Skip if already processing
-                if (isProcessing) return;
-
-                const currentValue = this.searchInput.value;
-
-                // Skip if value hasn't changed
-                if (currentValue === lastValue) return;
-
-                console.log(`[Appointments Search] ${eventType} triggered - Value:`, currentValue, 'Length:', currentValue.length);
-
-                lastValue = currentValue;
-                this.searchQuery = currentValue;
-                this.updateSearchUI();
-
-                // Set processing flag before render
-                isProcessing = true;
-                requestAnimationFrame(() => {
-                    this.render();
-                    isProcessing = false;
-                });
-            };
-
-            // Start polling when input is focused
-            this.searchInput?.addEventListener('focus', () => {
-                console.log('[Appointments Search] Focus - starting polling');
-                lastValue = this.searchInput.value;
-
-                // Clear any existing interval
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                }
-
-                // Poll every 200ms to catch uncommitted composition buffer text
-                pollInterval = setInterval(() => {
-                    // Skip polling if input is not focused
-                    if (document.activeElement !== this.searchInput) {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
-                        return;
-                    }
-
-                    const currentValue = this.searchInput.value;
-                    if (currentValue !== lastValue) {
-                        console.log('[Appointments Search] Polling detected change:', currentValue);
-                        // Only schedule new search if one isn't already pending
-                        if (!searchTimeout) {
-                            searchTimeout = setTimeout(() => {
-                                triggerSearch('polling');
-                                searchTimeout = null;
-                            }, 300);
-                        }
-                    }
-                }, 200);
+            // Track composition state
+            this.searchInput?.addEventListener('compositionstart', () => {
+                isComposing = true;
             });
 
-            // Stop polling when input loses focus
-            this.searchInput?.addEventListener('blur', () => {
-                console.log('[Appointments Search] Blur - stopping polling');
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                    pollInterval = null;
-                }
-                // Clear any pending search
-                if (searchTimeout) {
-                    clearTimeout(searchTimeout);
-                    searchTimeout = null;
-                }
-                // Trigger final search on blur only if value changed
-                if (this.searchInput.value !== lastValue) {
-                    triggerSearch('blur');
-                }
-            });
-
-            // Keep standard events as fallback for browsers where they work
-            this.searchInput?.addEventListener('input', (e) => {
-                console.log('[Appointments Search] Input event fired');
+            this.searchInput?.addEventListener('compositionend', (e) => {
+                isComposing = false;
+                // Trigger search after composition ends
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
-                    triggerSearch('input');
-                    searchTimeout = null;
+                    this.searchQuery = this.searchInput.value;
+                    this.updateSearchUI();
+                    this.render();
+                }, 100);
+            });
+
+            this.searchInput?.addEventListener('input', (e) => {
+                // Skip if composing (wait for compositionend)
+                if (isComposing) return;
+
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.searchQuery = this.searchInput.value;
+                    this.updateSearchUI();
+                    this.render();
                 }, 300);
             });
 
@@ -671,6 +610,9 @@
                     }
                 }
             }
+
+            // Add notification management
+            this.addNotificationButton(modal, appointment);
         },
 
         saveAppointment: function(modal, form, existingAppointment, descEditor, isStandalone) {
@@ -734,6 +676,19 @@
                 values.isStandalone = false;
             }
 
+            // Get notifications from modal's stored data
+            const notificationsData = modal.getAttribute('data-notifications');
+            if (notificationsData) {
+                try {
+                    values.notifications = JSON.parse(notificationsData);
+                } catch (e) {
+                    console.error('Error parsing notifications:', e);
+                }
+            } else if (existingAppointment && existingAppointment.notifications) {
+                // Keep existing notifications if not modified
+                values.notifications = existingAppointment.notifications;
+            }
+
             if (existingAppointment) {
                 const updated = window.SmartAgenda.DataManager.update('appointments', existingAppointment.id, values);
                 if (updated) {
@@ -759,6 +714,129 @@
                     window.SmartAgenda.UIComponents.closeModal(modal);
                 }
             }
+        },
+
+        /**
+         * Add notification button and management to appointment modal
+         */
+        addNotificationButton: function(modal, appointment) {
+            const formElement = modal.querySelector('.modal-form');
+            if (!formElement) return;
+
+            const currentNotifications = appointment?.notifications || [];
+
+            // Create notification section
+            const notificationSection = document.createElement('div');
+            notificationSection.className = 'notification-section';
+            notificationSection.style.cssText = 'margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);';
+
+            // Count active notifications
+            const notifCount = currentNotifications.length;
+            const countBadge = notifCount > 0 ? ` <span style="background: var(--primary-color); color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">${notifCount}</span>` : '';
+
+            notificationSection.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-weight: 500; color: var(--text-primary);">Ειδοποιήσεις</span>
+                        ${countBadge}
+                    </div>
+                    <button type="button" id="manage-notifications-btn"
+                            style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                        <span>${appointment ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                    </button>
+                </div>
+                ${notifCount > 0 ? `
+                    <div id="notifications-summary" style="margin-top: 12px; padding: 12px; background: var(--background); border-radius: 6px; border: 1px solid var(--border);">
+                        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Ενεργές ειδοποιήσεις:</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${currentNotifications.map(n => {
+                                const timeText = window.SmartAgenda.Notifications.formatNotificationTime(n.minutes);
+                                return `<span style="padding: 4px 10px; background: var(--primary-color)22; color: var(--primary-color); border-radius: 16px; font-size: 12px; font-weight: 500;">${timeText}</span>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+
+            // Append to form
+            formElement.appendChild(notificationSection);
+
+            // Store current notifications in modal
+            modal.setAttribute('data-notifications', JSON.stringify(currentNotifications));
+
+            // Bind button event
+            setTimeout(() => {
+                const manageBtn = modal.querySelector('#manage-notifications-btn');
+                if (manageBtn) {
+                    manageBtn.addEventListener('click', async () => {
+                        // Get current notifications from modal
+                        const currentData = modal.getAttribute('data-notifications');
+                        const currentNotifs = currentData ? JSON.parse(currentData) : [];
+
+                        // Show notification selector
+                        const selectedNotifications = await window.SmartAgenda.Notifications.showNotificationSelector(currentNotifs);
+
+                        if (selectedNotifications !== null) {
+                            // Update modal data
+                            modal.setAttribute('data-notifications', JSON.stringify(selectedNotifications));
+
+                            // Update summary
+                            const notifCount = selectedNotifications.length;
+                            const countBadge = notifCount > 0 ? ` <span style="background: var(--primary-color); color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">${notifCount}</span>` : '';
+
+                            const headerSection = notificationSection.querySelector('div:first-child');
+                            if (headerSection) {
+                                headerSection.innerHTML = `
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-weight: 500; color: var(--text-primary);">Ειδοποιήσεις</span>
+                                        ${countBadge}
+                                    </div>
+                                    <button type="button" id="manage-notifications-btn"
+                                            style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                                        <span>${appointment ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                                    </button>
+                                `;
+
+                                // Re-bind button
+                                const newBtn = headerSection.querySelector('#manage-notifications-btn');
+                                if (newBtn) {
+                                    newBtn.addEventListener('click', arguments.callee);
+                                }
+                            }
+
+                            // Update or create summary
+                            let summaryDiv = notificationSection.querySelector('#notifications-summary');
+                            if (notifCount > 0) {
+                                const summaryHtml = `
+                                    <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Ενεργές ειδοποιήσεις:</div>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                        ${selectedNotifications.map(n => {
+                                            const timeText = window.SmartAgenda.Notifications.formatNotificationTime(n.minutes);
+                                            return `<span style="padding: 4px 10px; background: var(--primary-color)22; color: var(--primary-color); border-radius: 16px; font-size: 12px; font-weight: 500;">${timeText}</span>`;
+                                        }).join('')}
+                                    </div>
+                                `;
+
+                                if (summaryDiv) {
+                                    summaryDiv.innerHTML = summaryHtml;
+                                } else {
+                                    summaryDiv = document.createElement('div');
+                                    summaryDiv.id = 'notifications-summary';
+                                    summaryDiv.style.cssText = 'margin-top: 12px; padding: 12px; background: var(--background); border-radius: 6px; border: 1px solid var(--border);';
+                                    summaryDiv.innerHTML = summaryHtml;
+                                    notificationSection.appendChild(summaryDiv);
+                                }
+                            } else {
+                                if (summaryDiv) {
+                                    summaryDiv.remove();
+                                }
+                            }
+
+                            window.SmartAgenda.Toast.success('Οι ειδοποιήσεις ενημερώθηκαν');
+                        }
+                    });
+                }
+            }, 100);
         },
 
         setupPartialPaymentHandling: function(modal, appointment) {

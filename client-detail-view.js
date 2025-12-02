@@ -59,16 +59,13 @@
                                 <div class="info-label">👤 Name</div>
                                 <div class="info-value">${this.escapeHtml(client.name)}</div>
                             </div>
-                            ${client.customerType ? `
+                            ${client.contactName ? `
                                 <div class="info-item">
-                                    <div class="info-label">🏷️ Type</div>
-                                    <div class="info-value">
-                                        <span class="contact-type ${client.customerType}">
-                                            ${client.customerType === 'existing' ? 'Existing Client' : 'Potential Client'}
-                                        </span>
-                                    </div>
+                                    <div class="info-label">👥 Contact Person</div>
+                                    <div class="info-value">${this.escapeHtml(client.contactName)}</div>
                                 </div>
                             ` : ''}
+                            ${this.getClientTypesHTML(client)}
                             ${client.phone ? `
                                 <div class="info-item">
                                     <div class="info-label">📞 Phone${client.phoneType ? ' (' + client.phoneType.charAt(0).toUpperCase() + client.phoneType.slice(1) + ')' : ''}</div>
@@ -388,6 +385,60 @@
             const div = document.createElement('div');
             div.innerHTML = html;
             return div.textContent || div.innerText || '';
+        },
+
+        getClientTypesHTML: function(client) {
+            // Get available types from settings
+            const availableTypes = window.SmartAgenda.Settings?.getClientTypes() || [];
+
+            if (availableTypes.length === 0) {
+                return '';
+            }
+
+            // Get client's types (support both old and new format)
+            let clientTypeIds = [];
+            let primaryTypeId = null;
+
+            if (client.clientTypes && client.clientTypes.length > 0) {
+                clientTypeIds = client.clientTypes;
+                primaryTypeId = client.primaryType || client.clientTypes[0];
+            } else if (client.customerType) {
+                // Legacy format
+                clientTypeIds = [client.customerType];
+                primaryTypeId = client.customerType;
+            }
+
+            if (clientTypeIds.length === 0) {
+                return '';
+            }
+
+            // Build HTML for types
+            let typesHTML = '<div class="info-item full-width"><div class="info-label">🏷️ Categories</div><div class="info-value" style="display: flex; flex-wrap: wrap; gap: 8px;">';
+
+            clientTypeIds.forEach(typeId => {
+                const type = availableTypes.find(t => t.id === typeId);
+                if (type) {
+                    const isPrimary = typeId === primaryTypeId;
+                    const starIcon = isPrimary ? '⭐ ' : '';
+
+                    typesHTML += `
+                        <span style="
+                            background: ${type.color}22;
+                            color: ${type.color};
+                            padding: 6px 12px;
+                            border-radius: 6px;
+                            font-size: 13px;
+                            font-weight: ${isPrimary ? '700' : '600'};
+                            border: 2px solid ${isPrimary ? type.color : 'transparent'};
+                        ">
+                            ${starIcon}${this.escapeHtml(type.name)}
+                        </span>
+                    `;
+                }
+            });
+
+            typesHTML += '</div></div>';
+            return typesHTML;
         },
 
         escapeHtml: function(text) {

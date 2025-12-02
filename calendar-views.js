@@ -353,9 +353,28 @@
             // Initial render
             renderResults('');
 
-            // Search input listener
+            // Search input listener with IME composition support
+            let searchTimeout = null;
+            let isComposing = false;
+
+            searchInput.addEventListener('compositionstart', () => {
+                isComposing = true;
+            });
+
+            searchInput.addEventListener('compositionend', (e) => {
+                isComposing = false;
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    renderResults(e.target.value);
+                }, 100);
+            });
+
             searchInput.addEventListener('input', (e) => {
-                renderResults(e.target.value);
+                if (isComposing) return;
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    renderResults(e.target.value);
+                }, 300);
             });
 
             // Standalone button
@@ -455,9 +474,28 @@
             // Initial render
             renderResults('');
 
-            // Search input listener
+            // Search input listener with IME composition support
+            let searchTimeout = null;
+            let isComposing = false;
+
+            searchInput.addEventListener('compositionstart', () => {
+                isComposing = true;
+            });
+
+            searchInput.addEventListener('compositionend', (e) => {
+                isComposing = false;
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    renderResults(e.target.value);
+                }, 100);
+            });
+
             searchInput.addEventListener('input', (e) => {
-                renderResults(e.target.value);
+                if (isComposing) return;
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    renderResults(e.target.value);
+                }, 300);
             });
 
             // Standalone button

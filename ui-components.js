@@ -16,6 +16,17 @@
 
         init: function() {
             this.modalContainer = document.getElementById('modal-container');
+            this.initGreekTextInputFix();
+        },
+
+        /**
+         * Initialize text input handling
+         * Note: Greek text input should work naturally without intervention
+         */
+        initGreekTextInputFix: function() {
+            // Removed custom text input handling as it was causing cursor issues
+            // Greek/CJK text input should work naturally in modern browsers
+            console.log('✅ Text input initialized (natural behavior)');
         },
 
         // ============================================

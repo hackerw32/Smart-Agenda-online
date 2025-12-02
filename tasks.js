@@ -39,96 +39,35 @@
             // Add button - creates standalone task by default
             this.addButton?.addEventListener('click', () => this.showTaskModal());
 
-            // Real-time search with VALUE POLLING for Android Greek keyboard compatibility
-            // Android Greek keyboards don't fire events while typing - characters stay in composition buffer
-            // Solution: Poll input.value every 200ms to detect changes
+            // Search with proper IME composition support for Greek keyboard
             let searchTimeout = null;
-            let lastValue = '';
-            let pollInterval = null;
-            let isProcessing = false; // Prevent overlapping searches
+            let isComposing = false;
 
-            // Helper function to trigger search
-            const triggerSearch = (eventType) => {
-                // Skip if already processing
-                if (isProcessing) return;
-
-                const currentValue = this.searchInput.value;
-
-                // Skip if value hasn't changed
-                if (currentValue === lastValue) return;
-
-                console.log(`[Tasks Search] ${eventType} triggered - Value:`, currentValue, 'Length:', currentValue.length);
-
-                lastValue = currentValue;
-                this.searchQuery = currentValue;
-                this.updateSearchUI();
-
-                // Set processing flag before render
-                isProcessing = true;
-                requestAnimationFrame(() => {
-                    this.render();
-                    isProcessing = false;
-                });
-            };
-
-            // Start polling when input is focused
-            this.searchInput?.addEventListener('focus', () => {
-                console.log('[Tasks Search] Focus - starting polling');
-                lastValue = this.searchInput.value;
-
-                // Clear any existing interval
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                }
-
-                // Poll every 200ms to catch uncommitted composition buffer text
-                pollInterval = setInterval(() => {
-                    // Skip polling if input is not focused
-                    if (document.activeElement !== this.searchInput) {
-                        clearInterval(pollInterval);
-                        pollInterval = null;
-                        return;
-                    }
-
-                    const currentValue = this.searchInput.value;
-                    if (currentValue !== lastValue) {
-                        console.log('[Tasks Search] Polling detected change:', currentValue);
-                        // Only schedule new search if one isn't already pending
-                        if (!searchTimeout) {
-                            searchTimeout = setTimeout(() => {
-                                triggerSearch('polling');
-                                searchTimeout = null;
-                            }, 300);
-                        }
-                    }
-                }, 200);
+            // Track composition state
+            this.searchInput?.addEventListener('compositionstart', () => {
+                isComposing = true;
             });
 
-            // Stop polling when input loses focus
-            this.searchInput?.addEventListener('blur', () => {
-                console.log('[Tasks Search] Blur - stopping polling');
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                    pollInterval = null;
-                }
-                // Clear any pending search
-                if (searchTimeout) {
-                    clearTimeout(searchTimeout);
-                    searchTimeout = null;
-                }
-                // Trigger final search on blur only if value changed
-                if (this.searchInput.value !== lastValue) {
-                    triggerSearch('blur');
-                }
-            });
-
-            // Keep standard events as fallback for browsers where they work
-            this.searchInput?.addEventListener('input', (e) => {
-                console.log('[Tasks Search] Input event fired');
+            this.searchInput?.addEventListener('compositionend', (e) => {
+                isComposing = false;
+                // Trigger search after composition ends
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
-                    triggerSearch('input');
-                    searchTimeout = null;
+                    this.searchQuery = this.searchInput.value;
+                    this.updateSearchUI();
+                    this.render();
+                }, 100);
+            });
+
+            this.searchInput?.addEventListener('input', (e) => {
+                // Skip if composing (wait for compositionend)
+                if (isComposing) return;
+
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.searchQuery = this.searchInput.value;
+                    this.updateSearchUI();
+                    this.render();
                 }, 300);
             });
 
@@ -482,6 +421,9 @@
             // Add file attachments
             this.addTaskFileAttachments(modal, task);
 
+            // Add checklist functionality
+            this.addTaskChecklist(modal, task);
+
             // Add search functionality to client select if it exists
             const clientSelect = form.element.querySelector('[name="client"]');
             if (clientSelect) {
@@ -510,6 +452,9 @@
                     }
                 }
             }
+
+            // Add notification management
+            this.addNotificationButton(modal, task);
         },
 
         addTaskFileAttachments: function(modal, task) {
@@ -603,6 +548,140 @@
             return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         },
 
+        /**
+         * Add checklist functionality to task modal
+         */
+        addTaskChecklist: function(modal, task) {
+            const formElement = modal.querySelector('.modal-form');
+            if (!formElement) return;
+
+            const existingChecklist = task?.checklist || [];
+
+            // Create checklist container
+            const checklistContainer = document.createElement('div');
+            checklistContainer.className = 'form-group';
+            checklistContainer.innerHTML = `
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Checklist</label>
+                <div style="margin-bottom: 12px;">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text"
+                               id="task-checklist-input"
+                               placeholder="Add checklist item..."
+                               style="flex: 1; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-primary); font-size: 14px;">
+                        <button type="button"
+                                id="add-checklist-item-btn"
+                                class="btn-primary"
+                                style="padding: 8px 16px; white-space: nowrap;">
+                            ➕ Add
+                        </button>
+                    </div>
+                </div>
+                <div id="task-checklist-items" style="display: flex; flex-direction: column; gap: 8px;">
+                    ${existingChecklist.map((item, index) => `
+                        <div class="checklist-item" data-index="${index}" style="display: flex; align-items: center; gap: 8px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px;">
+                            <input type="checkbox"
+                                   class="checklist-checkbox"
+                                   ${item.checked ? 'checked' : ''}
+                                   style="width: 18px; height: 18px; cursor: pointer;">
+                            <span class="checklist-text" style="flex: 1; color: var(--text-primary); ${item.checked ? 'text-decoration: line-through; opacity: 0.6;' : ''}">${this.escapeHtml(item.text)}</span>
+                            <button type="button"
+                                    class="remove-checklist-item-btn"
+                                    style="padding: 4px 8px; background: var(--danger-color); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                ✕
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            // Find a good place to insert (after attachments or before notifications)
+            const notificationSection = formElement.querySelector('.notification-section');
+            if (notificationSection) {
+                formElement.insertBefore(checklistContainer, notificationSection);
+            } else {
+                formElement.appendChild(checklistContainer);
+            }
+
+            // Bind events
+            setTimeout(() => {
+                const input = modal.querySelector('#task-checklist-input');
+                const addBtn = modal.querySelector('#add-checklist-item-btn');
+                const checklistItems = modal.querySelector('#task-checklist-items');
+
+                // Add checklist item
+                const addChecklistItem = () => {
+                    const text = input.value.trim();
+                    if (!text) {
+                        window.SmartAgenda.Toast.warning('Please enter checklist item text');
+                        return;
+                    }
+
+                    const currentItems = checklistItems.querySelectorAll('.checklist-item');
+                    const newIndex = currentItems.length;
+
+                    const itemHtml = `
+                        <div class="checklist-item" data-index="${newIndex}" style="display: flex; align-items: center; gap: 8px; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px;">
+                            <input type="checkbox"
+                                   class="checklist-checkbox"
+                                   style="width: 18px; height: 18px; cursor: pointer;">
+                            <span class="checklist-text" style="flex: 1; color: var(--text-primary);">${this.escapeHtml(text)}</span>
+                            <button type="button"
+                                    class="remove-checklist-item-btn"
+                                    style="padding: 4px 8px; background: var(--danger-color); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                ✕
+                            </button>
+                        </div>
+                    `;
+
+                    checklistItems.insertAdjacentHTML('beforeend', itemHtml);
+
+                    // Bind events to new item
+                    this.bindChecklistItemEvents(checklistItems.lastElementChild);
+
+                    input.value = '';
+                    input.focus();
+                };
+
+                addBtn.addEventListener('click', addChecklistItem);
+                input.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addChecklistItem();
+                    }
+                });
+
+                // Bind events to existing items
+                modal.querySelectorAll('.checklist-item').forEach(item => {
+                    this.bindChecklistItemEvents(item);
+                });
+            }, 100);
+        },
+
+        /**
+         * Bind events to a checklist item
+         */
+        bindChecklistItemEvents: function(item) {
+            const checkbox = item.querySelector('.checklist-checkbox');
+            const text = item.querySelector('.checklist-text');
+            const removeBtn = item.querySelector('.remove-checklist-item-btn');
+
+            // Toggle checked state
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    text.style.textDecoration = 'line-through';
+                    text.style.opacity = '0.6';
+                } else {
+                    text.style.textDecoration = 'none';
+                    text.style.opacity = '1';
+                }
+            });
+
+            // Remove item
+            removeBtn.addEventListener('click', () => {
+                item.remove();
+            });
+        },
+
         saveTask: function(modal, form, existingTask, descEditor, isStandalone) {
             const values = form.getValues();
 
@@ -650,15 +729,47 @@
                 data: item.dataset.file
             }));
 
+            // Get checklist items
+            const checklistItems = modal.querySelectorAll('#task-checklist-items .checklist-item');
+            values.checklist = Array.from(checklistItems).map(item => ({
+                text: item.querySelector('.checklist-text').textContent.trim(),
+                checked: item.querySelector('.checklist-checkbox').checked
+            }));
+
+            // Get notifications from modal's stored data
+            const notificationsData = modal.getAttribute('data-notifications');
+            if (notificationsData) {
+                try {
+                    values.notifications = JSON.parse(notificationsData);
+                } catch (e) {
+                    console.error('Error parsing notifications:', e);
+                }
+            } else if (existingTask && existingTask.notifications) {
+                // Keep existing notifications if not modified
+                values.notifications = existingTask.notifications;
+            }
+
             if (existingTask) {
                 const updated = window.SmartAgenda.DataManager.update('tasks', existingTask.id, values);
                 if (updated) {
+                    // Schedule notification for updated task
+                    if (window.SmartAgenda.Notifications) {
+                        const updatedTask = window.SmartAgenda.DataManager.getById('tasks', existingTask.id);
+                        window.SmartAgenda.Notifications.cancelNotification(existingTask.id);
+                        window.SmartAgenda.Notifications.scheduleNotification(updatedTask);
+                    }
+
                     window.SmartAgenda.Toast.success(window.SmartAgenda.I18n.translate('msg.saved'));
                     window.SmartAgenda.UIComponents.closeModal(modal);
                 }
             } else {
                 const added = window.SmartAgenda.DataManager.add('tasks', values);
                 if (added) {
+                    // Schedule notification for new task
+                    if (window.SmartAgenda.Notifications) {
+                        window.SmartAgenda.Notifications.scheduleNotification(added);
+                    }
+
                     window.SmartAgenda.Toast.success(window.SmartAgenda.I18n.translate('msg.saved'));
                     window.SmartAgenda.UIComponents.closeModal(modal);
                 }
@@ -673,8 +784,13 @@
                 cancelText: window.SmartAgenda.I18n.translate('actions.cancel'),
                 type: 'danger'
             });
-            
+
             if (confirmed) {
+                // Cancel notifications before deleting
+                if (window.SmartAgenda.Notifications) {
+                    window.SmartAgenda.Notifications.cancelNotification(taskId);
+                }
+
                 const deleted = window.SmartAgenda.DataManager.delete('tasks', taskId);
                 if (deleted) {
                     window.SmartAgenda.Toast.success(window.SmartAgenda.I18n.translate('msg.deleted'));
@@ -685,6 +801,143 @@
 
         toggleComplete: function(taskId, completed) {
             window.SmartAgenda.DataManager.update('tasks', taskId, { completed });
+
+            // Handle notifications based on completion status
+            if (window.SmartAgenda.Notifications) {
+                if (completed) {
+                    // Task completed - cancel notifications
+                    window.SmartAgenda.Notifications.cancelNotification(taskId);
+                } else {
+                    // Task marked as incomplete - reschedule notifications
+                    const task = window.SmartAgenda.DataManager.getById('tasks', taskId);
+                    if (task) {
+                        window.SmartAgenda.Notifications.scheduleNotification(task);
+                    }
+                }
+            }
+        },
+
+        /**
+         * Add notification button and management to task modal
+         */
+        addNotificationButton: function(modal, task) {
+            const formElement = modal.querySelector('.modal-form');
+            if (!formElement) return;
+
+            const currentNotifications = task?.notifications || [];
+
+            // Create notification section
+            const notificationSection = document.createElement('div');
+            notificationSection.className = 'notification-section';
+            notificationSection.style.cssText = 'margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);';
+
+            // Count active notifications
+            const notifCount = currentNotifications.length;
+            const countBadge = notifCount > 0 ? ` <span style="background: var(--primary-color); color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">${notifCount}</span>` : '';
+
+            notificationSection.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-weight: 500; color: var(--text-primary);">Ειδοποιήσεις</span>
+                        ${countBadge}
+                    </div>
+                    <button type="button" id="manage-notifications-btn"
+                            style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                        <span>${task ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                    </button>
+                </div>
+                ${notifCount > 0 ? `
+                    <div id="notifications-summary" style="margin-top: 12px; padding: 12px; background: var(--background); border-radius: 6px; border: 1px solid var(--border);">
+                        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Ενεργές ειδοποιήσεις:</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${currentNotifications.map(n => {
+                                const timeText = window.SmartAgenda.Notifications.formatNotificationTime(n.minutes);
+                                return `<span style="padding: 4px 10px; background: var(--primary-color)22; color: var(--primary-color); border-radius: 16px; font-size: 12px; font-weight: 500;">${timeText}</span>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+
+            // Append to form
+            formElement.appendChild(notificationSection);
+
+            // Store current notifications in modal
+            modal.setAttribute('data-notifications', JSON.stringify(currentNotifications));
+
+            // Bind button event
+            setTimeout(() => {
+                const manageBtn = modal.querySelector('#manage-notifications-btn');
+                if (manageBtn) {
+                    manageBtn.addEventListener('click', async () => {
+                        // Get current notifications from modal
+                        const currentData = modal.getAttribute('data-notifications');
+                        const currentNotifs = currentData ? JSON.parse(currentData) : [];
+
+                        // Show notification selector
+                        const selectedNotifications = await window.SmartAgenda.Notifications.showNotificationSelector(currentNotifs);
+
+                        if (selectedNotifications !== null) {
+                            // Update modal data
+                            modal.setAttribute('data-notifications', JSON.stringify(selectedNotifications));
+
+                            // Update summary
+                            const notifCount = selectedNotifications.length;
+                            const countBadge = notifCount > 0 ? ` <span style="background: var(--primary-color); color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">${notifCount}</span>` : '';
+
+                            const headerSection = notificationSection.querySelector('div:first-child');
+                            if (headerSection) {
+                                headerSection.innerHTML = `
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span style="font-weight: 500; color: var(--text-primary);">Ειδοποιήσεις</span>
+                                        ${countBadge}
+                                    </div>
+                                    <button type="button" id="manage-notifications-btn"
+                                            style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                                        <span>${task ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                                    </button>
+                                `;
+
+                                // Re-bind button
+                                const newBtn = headerSection.querySelector('#manage-notifications-btn');
+                                if (newBtn) {
+                                    newBtn.addEventListener('click', arguments.callee);
+                                }
+                            }
+
+                            // Update or create summary
+                            let summaryDiv = notificationSection.querySelector('#notifications-summary');
+                            if (notifCount > 0) {
+                                const summaryHtml = `
+                                    <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Ενεργές ειδοποιήσεις:</div>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                        ${selectedNotifications.map(n => {
+                                            const timeText = window.SmartAgenda.Notifications.formatNotificationTime(n.minutes);
+                                            return `<span style="padding: 4px 10px; background: var(--primary-color)22; color: var(--primary-color); border-radius: 16px; font-size: 12px; font-weight: 500;">${timeText}</span>`;
+                                        }).join('')}
+                                    </div>
+                                `;
+
+                                if (summaryDiv) {
+                                    summaryDiv.innerHTML = summaryHtml;
+                                } else {
+                                    summaryDiv = document.createElement('div');
+                                    summaryDiv.id = 'notifications-summary';
+                                    summaryDiv.style.cssText = 'margin-top: 12px; padding: 12px; background: var(--background); border-radius: 6px; border: 1px solid var(--border);';
+                                    summaryDiv.innerHTML = summaryHtml;
+                                    notificationSection.appendChild(summaryDiv);
+                                }
+                            } else {
+                                if (summaryDiv) {
+                                    summaryDiv.remove();
+                                }
+                            }
+
+                            window.SmartAgenda.Toast.success('Οι ειδοποιήσεις ενημερώθηκαν');
+                        }
+                    });
+                }
+            }, 100);
         },
 
         showFilterMenu: function() {

@@ -29,6 +29,7 @@
 
         bindEvents: function() {
             const exportBtn = document.getElementById('export-data-btn');
+            const shareBackupBtn = document.getElementById('share-backup-btn');
             const importBtn = document.getElementById('import-data-btn');
             const clearBtn = document.getElementById('clear-data-btn');
             const addClientTypeBtn = document.getElementById('add-client-type-btn');
@@ -43,6 +44,12 @@
             if (exportBtn) {
                 exportBtn.addEventListener('click', () => {
                     window.SmartAgenda.DataManager.downloadBackup();
+                });
+            }
+
+            if (shareBackupBtn) {
+                shareBackupBtn.addEventListener('click', () => {
+                    window.SmartAgenda.DataManager.shareBackup();
                 });
             }
 
@@ -66,17 +73,17 @@
                     const input = document.createElement('input');
                     input.type = 'file';
                     input.accept = '.json';
-                    input.onchange = (e) => {
+                    input.onchange = async (e) => {
                         const file = e.target.files[0];
                         if (file) {
                             const reader = new FileReader();
-                            reader.onload = (event) => {
+                            reader.onload = async (event) => {
                                 try {
                                     const data = JSON.parse(event.target.result);
-                                    window.SmartAgenda.DataManager.importData(data);
-                                    location.reload();
+                                    await this.handleBackupImport(data);
                                 } catch (error) {
                                     window.SmartAgenda.Toast.error('Invalid JSON file');
+                                    console.error('Import error:', error);
                                 }
                             };
                             reader.readAsText(file);
@@ -645,6 +652,254 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        },
+
+        // ============================================
+        // Backup Import with Merge/Replace Option
+        // ============================================
+
+        handleBackupImport: async function(data) {
+            // Check if there's existing data
+            const existingClients = window.SmartAgenda.DataManager.getAll('clients');
+            const existingAppointments = window.SmartAgenda.DataManager.getAll('appointments');
+            const existingTasks = window.SmartAgenda.DataManager.getAll('tasks');
+
+            const hasExistingData = existingClients.length > 0 || existingAppointments.length > 0 || existingTasks.length > 0;
+
+            if (!hasExistingData) {
+                // No existing data, just import directly
+                window.SmartAgenda.DataManager.importData(data, false);
+                location.reload();
+                return;
+            }
+
+            // Ask user: merge or replace?
+            const importMode = await this.showImportModeDialog(data);
+
+            if (!importMode) {
+                // User cancelled
+                return;
+            }
+
+            if (importMode === 'replace') {
+                // Replace mode: clear and import
+                const confirmed = await window.SmartAgenda.UIComponents.confirm({
+                    title: 'Clear and Import',
+                    message: 'This will delete all your current data and replace it with the backup. Are you sure?',
+                    confirmText: 'Yes, Replace All',
+                    type: 'danger'
+                });
+
+                if (confirmed) {
+                    window.SmartAgenda.DataManager.importData(data, false);
+                    location.reload();
+                }
+            } else if (importMode === 'merge') {
+                // Merge mode: check for duplicates
+                if (data.clients && data.clients.length > 0) {
+                    const { duplicates, newClients } = window.SmartAgenda.DataManager.findDuplicateClients(data.clients);
+
+                    if (duplicates.length > 0) {
+                        // Handle duplicates
+                        await this.handleBackupDuplicates(duplicates, data, newClients);
+                    } else {
+                        // No duplicates, merge directly
+                        window.SmartAgenda.DataManager.importData(data, true);
+                        location.reload();
+                    }
+                } else {
+                    // No clients in backup, just merge
+                    window.SmartAgenda.DataManager.importData(data, true);
+                    location.reload();
+                }
+            }
+        },
+
+        showImportModeDialog: function(data) {
+            return new Promise((resolve) => {
+                const backupInfo = `
+                    <div style="padding: 12px; background: var(--background); border-radius: 6px; margin-bottom: 16px;">
+                        <strong>Backup Contains:</strong><br>
+                        Clients: ${data.clients ? data.clients.length : 0}<br>
+                        Appointments: ${data.appointments ? data.appointments.length : 0}<br>
+                        Tasks: ${data.tasks ? data.tasks.length : 0}<br>
+                        Export Date: ${data.exportDate ? new Date(data.exportDate).toLocaleDateString() : 'Unknown'}
+                    </div>
+                `;
+
+                const content = `
+                    <div>
+                        <p style="margin-bottom: 16px;">
+                            You have existing data in the app. How would you like to import this backup?
+                        </p>
+                        ${backupInfo}
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div style="padding: 12px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+                                 id="import-mode-replace"
+                                 onmouseover="this.style.borderColor='var(--danger-color)'; this.style.background='var(--danger-color)11';"
+                                 onmouseout="this.style.borderColor='var(--border)'; this.style.background='transparent';">
+                                <div style="font-weight: 600; margin-bottom: 4px;">🗑️ Clear and Replace</div>
+                                <div style="font-size: 13px; color: var(--text-secondary);">
+                                    Delete all current data and import the backup
+                                </div>
+                            </div>
+                            <div style="padding: 12px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+                                 id="import-mode-merge"
+                                 onmouseover="this.style.borderColor='var(--success-color)'; this.style.background='var(--success-color)11';"
+                                 onmouseout="this.style.borderColor='var(--border)'; this.style.background='transparent';">
+                                <div style="font-weight: 600; margin-bottom: 4px;">🔄 Merge with Existing</div>
+                                <div style="font-size: 13px; color: var(--text-secondary);">
+                                    Keep current data and add new items from backup (handles duplicates)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const modal = window.SmartAgenda.UIComponents.showModal({
+                    title: 'Import Backup',
+                    content: content,
+                    buttons: [
+                        {
+                            label: 'Cancel',
+                            type: 'secondary',
+                            onClick: () => {
+                                window.SmartAgenda.UIComponents.closeModal(modal);
+                                resolve(null);
+                            }
+                        }
+                    ]
+                });
+
+                // Add click handlers for the mode selection cards
+                setTimeout(() => {
+                    document.getElementById('import-mode-replace')?.addEventListener('click', () => {
+                        window.SmartAgenda.UIComponents.closeModal(modal);
+                        resolve('replace');
+                    });
+
+                    document.getElementById('import-mode-merge')?.addEventListener('click', () => {
+                        window.SmartAgenda.UIComponents.closeModal(modal);
+                        resolve('merge');
+                    });
+                }, 100);
+            });
+        },
+
+        handleBackupDuplicates: async function(duplicates, backupData, newClients) {
+            for (const dup of duplicates) {
+                const choice = await this.showBackupDuplicateDialog(dup);
+
+                if (choice === 'keep-existing') {
+                    // Do nothing, keep existing
+                    continue;
+                } else if (choice === 'keep-imported') {
+                    // Replace existing with imported
+                    window.SmartAgenda.DataManager.update('clients', dup.existing.id, {
+                        ...dup.imported,
+                        id: dup.existing.id // Keep same ID
+                    });
+                } else if (choice === 'merge') {
+                    // Merge: keep existing data, add missing fields from imported
+                    const merged = { ...dup.existing };
+                    if (!merged.phone && dup.imported.phone) merged.phone = dup.imported.phone;
+                    if (!merged.phone2 && dup.imported.phone2) merged.phone2 = dup.imported.phone2;
+                    if (!merged.email && dup.imported.email) merged.email = dup.imported.email;
+                    if (!merged.email2 && dup.imported.email2) merged.email2 = dup.imported.email2;
+                    if (!merged.address && dup.imported.address) merged.address = dup.imported.address;
+                    if (!merged.city && dup.imported.city) merged.city = dup.imported.city;
+                    if (!merged.website && dup.imported.website) merged.website = dup.imported.website;
+                    if (!merged.facebook && dup.imported.facebook) merged.facebook = dup.imported.facebook;
+                    if (!merged.instagram && dup.imported.instagram) merged.instagram = dup.imported.instagram;
+                    if (!merged.linkedin && dup.imported.linkedin) merged.linkedin = dup.imported.linkedin;
+                    if (!merged.notes && dup.imported.notes) merged.notes = dup.imported.notes;
+
+                    window.SmartAgenda.DataManager.update('clients', dup.existing.id, merged);
+                }
+            }
+
+            // Add new clients (non-duplicates)
+            newClients.forEach(client => {
+                window.SmartAgenda.DataManager.add('clients', client);
+            });
+
+            // Import other data (appointments, tasks) with merge
+            const otherData = { ...backupData };
+            delete otherData.clients; // We handled clients separately
+            window.SmartAgenda.DataManager.importData(otherData, true);
+
+            window.SmartAgenda.Toast.success('Backup merged successfully');
+            location.reload();
+        },
+
+        showBackupDuplicateDialog: function(duplicate) {
+            return new Promise((resolve) => {
+                const existingInfo = `
+                    <strong>Existing Contact:</strong><br>
+                    Name: ${this.escapeHtml(duplicate.existing.name)}<br>
+                    Phone: ${this.escapeHtml(duplicate.existing.phone || 'N/A')}<br>
+                    Email: ${this.escapeHtml(duplicate.existing.email || 'N/A')}<br>
+                    Created: ${duplicate.existing.date ? new Date(duplicate.existing.date).toLocaleDateString() : 'Unknown'}<br>
+                    Source: <em>Current Memory</em>
+                `;
+
+                const importedInfo = `
+                    <strong>Backup Contact:</strong><br>
+                    Name: ${this.escapeHtml(duplicate.imported.name)}<br>
+                    Phone: ${this.escapeHtml(duplicate.imported.phone || 'N/A')}<br>
+                    Email: ${this.escapeHtml(duplicate.imported.email || 'N/A')}<br>
+                    Created: ${duplicate.imported.date ? new Date(duplicate.imported.date).toLocaleDateString() : 'Unknown'}<br>
+                    Source: <em>Backup File</em>
+                `;
+
+                const content = `
+                    <div style="margin-bottom: 16px;">
+                        <p style="margin-bottom: 12px; font-weight: 600; color: var(--warning-color);">
+                            ⚠️ Duplicate contact detected!
+                        </p>
+                        <div style="padding: 12px; background: var(--background); border-radius: 6px; margin-bottom: 12px;">
+                            ${existingInfo}
+                        </div>
+                        <div style="padding: 12px; background: var(--background); border-radius: 6px;">
+                            ${importedInfo}
+                        </div>
+                        <p style="margin-top: 12px; font-size: 14px; color: var(--text-secondary);">
+                            Which version would you like to keep?
+                        </p>
+                    </div>
+                `;
+
+                const modal = window.SmartAgenda.UIComponents.showModal({
+                    title: 'Duplicate Contact Found',
+                    content: content,
+                    buttons: [
+                        {
+                            label: 'Keep Current',
+                            type: 'secondary',
+                            onClick: () => {
+                                window.SmartAgenda.UIComponents.closeModal(modal);
+                                resolve('keep-existing');
+                            }
+                        },
+                        {
+                            label: 'Use Backup',
+                            type: 'primary',
+                            onClick: () => {
+                                window.SmartAgenda.UIComponents.closeModal(modal);
+                                resolve('keep-imported');
+                            }
+                        },
+                        {
+                            label: 'Merge Both',
+                            type: 'success',
+                            onClick: () => {
+                                window.SmartAgenda.UIComponents.closeModal(modal);
+                                resolve('merge');
+                            }
+                        }
+                    ]
+                });
+            });
         }
     };
 

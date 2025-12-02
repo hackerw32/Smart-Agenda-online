@@ -21,12 +21,15 @@
     
     <!-- Main Styles -->
     <link rel="stylesheet" href="style.css">
-    
+
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
-    
+
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="icon.png">
+
+    <!-- Global IME Fix for Greek Keyboard - Load FIRST -->
+    <script src="ime-global-fix.js"></script>
 </head>
 <body>
     <!-- Loading Screen -->
@@ -291,6 +294,14 @@
                                     <span>📇</span>
                                     <span data-i18n="advanced.export_vcf">Export Contacts VCF</span>
                                 </button>
+                                <button class="btn-secondary" id="bulk-import-vcf-btn">
+                                    <span>📥</span>
+                                    <span data-i18n="advanced.import_vcf">Import Contacts VCF</span>
+                                </button>
+                                <button class="btn-secondary" id="bulk-import-xls-btn">
+                                    <span>📊</span>
+                                    <span data-i18n="advanced.import_xls">Import XLS Contacts</span>
+                                </button>
                                 <button class="btn-secondary" id="bulk-delete-clients-btn">
                                     <span>🗑️</span>
                                     <span data-i18n="advanced.delete_selected">Delete Selected</span>
@@ -416,8 +427,12 @@
                         <h2 data-i18n="settings.data">Data Management</h2>
                         <div class="setting-buttons">
                             <button class="btn-secondary" id="export-data-btn">
+                                <span>💾</span>
+                                <span>Αποθηκευση Backup στα Documents</span>
+                            </button>
+                            <button class="btn-secondary" id="share-backup-btn">
                                 <span>📤</span>
-                                <span data-i18n="settings.export">Export Data</span>
+                                <span>Send Backup</span>
                             </button>
                             <button class="btn-secondary" id="import-data-btn">
                                 <span>📥</span>
