@@ -31,6 +31,7 @@
             const exportBtn = document.getElementById('export-data-btn');
             const shareBackupBtn = document.getElementById('share-backup-btn');
             const importBtn = document.getElementById('import-data-btn');
+            const fileManagerBtn = document.getElementById('file-manager-btn');
             const clearBtn = document.getElementById('clear-data-btn');
             const addClientTypeBtn = document.getElementById('add-client-type-btn');
 
@@ -90,6 +91,14 @@
                         }
                     };
                     input.click();
+                });
+            }
+
+            if (fileManagerBtn) {
+                fileManagerBtn.addEventListener('click', () => {
+                    if (window.SmartAgenda.FileManager) {
+                        window.SmartAgenda.FileManager.show();
+                    }
                 });
             }
 

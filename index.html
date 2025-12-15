@@ -76,6 +76,10 @@
                     <span class="nav-icon">📅</span>
                     <span class="nav-label" data-i18n="nav.appointments">Appointments</span>
                 </button>
+                <button class="nav-item" data-tab="interactions">
+                    <span class="nav-icon">🤝</span>
+                    <span class="nav-label" data-i18n="nav.interactions">Interactions</span>
+                </button>
                 <button class="nav-item" data-tab="tasks">
                     <span class="nav-icon">✓</span>
                     <span class="nav-label" data-i18n="nav.tasks">Tasks</span>
@@ -274,6 +278,35 @@
                 </div>
             </section>
 
+            <!-- Interactions Tab -->
+            <section class="tab-content" id="interactions-tab">
+                <div class="tab-header">
+                    <div class="search-bar">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="interactions-search" placeholder="Search interactions and clients..." data-i18n-placeholder="search.interactions">
+                        <button class="search-clear-btn" id="interactions-search-clear" style="display: none;" aria-label="Clear search">✕</button>
+                    </div>
+                    <div class="tab-actions">
+                        <button class="btn-icon" id="interactions-filter-btn" aria-label="Filter">
+                            <span>🔽</span>
+                            <span data-i18n="actions.filter">Filters</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats Summary -->
+                <div id="interactions-stats" class="interactions-stats">
+                    <!-- Stats will be rendered here -->
+                </div>
+
+                <div id="interactions-search-indicator" class="search-result-indicator" style="display: none;">
+                    <span>🔍 Search results</span>
+                </div>
+                <div class="items-list" id="interactions-list">
+                    <!-- Interaction items will be rendered here -->
+                </div>
+            </section>
+
             <!-- Advanced Tab -->
             <section class="tab-content" id="advanced-tab">
                 <div class="advanced-container">
@@ -438,6 +471,10 @@
                                 <span>📥</span>
                                 <span data-i18n="settings.import">Import Data</span>
                             </button>
+                            <button class="btn-secondary" id="file-manager-btn">
+                                <span>📎</span>
+                                <span>File Manager</span>
+                            </button>
                             <button class="btn-danger" id="clear-data-btn">
                                 <span>🗑️</span>
                                 <span data-i18n="settings.clear">Clear All Data</span>
@@ -503,11 +540,18 @@
     <script src="quick-actions.js"></script>
     <script src="home.js"></script>
     <script src="client-detail-view.js"></script>
+    <script src="file-viewer.js"></script>
+    <script src="client-modal-new.js"></script>
+    <script src="client-modal-new-functions.js"></script>
+    <script src="client-modal-phase2-functions.js"></script>
+    <script src="client-modal-phase3-functions.js"></script>
+    <script src="file-manager.js"></script>
     <script src="clients.js"></script>
     <script src="appointments.js"></script>
     <script src="tasks.js"></script>
     <script src="maps.js"></script>
     <script src="calendar-views.js"></script>
+    <script src="interactions-page.js"></script>
     <script src="advanced.js"></script>
     <script src="notifications.js"></script>
     <script src="settings.js"></script>

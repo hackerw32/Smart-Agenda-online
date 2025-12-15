@@ -51,6 +51,15 @@
                     }
                 });
             }
+
+            // Listen to orientation changes to re-render calendar
+            window.matchMedia('(orientation: landscape)').addEventListener('change', () => {
+                if (this.currentView === 'appointments') {
+                    this.renderAppointmentsCalendar();
+                } else if (this.currentView === 'finance') {
+                    this.renderFinanceCalendar();
+                }
+            });
         },
 
         // ============================================
@@ -62,59 +71,66 @@
             if (!container) return;
 
             const appointments = window.SmartAgenda.DataManager.getAll('appointments');
-            
+
             // Group appointments by date
             const appointmentsByDate = this.groupAppointmentsByDate(appointments);
-            
+
             // Calculate statistics
             const stats = this.calculateAppointmentStats(appointments);
 
+            // Get selected date (default to today)
+            if (!this.selectedDate) {
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                this.selectedDate = `${year}-${month}-${day}`;
+            }
+
             container.innerHTML = `
-                <div class="calendar-container">
-                    <div class="calendar-header">
-                        <div class="calendar-nav">
+                <div class="gcal-container">
+                    <!-- Compact Stats Row -->
+                    <div class="gcal-compact-stats">
+                        <div class="gcal-stat-item">
+                            <span class="gcal-stat-label">${window.SmartAgenda.I18n.translate('calendar.total')}</span>
+                            <span class="gcal-stat-number">${stats.total}</span>
+                        </div>
+                        <div class="gcal-stat-item" style="color: var(--warning)">
+                            <span class="gcal-stat-label">${window.SmartAgenda.I18n.translate('calendar.pending')}</span>
+                            <span class="gcal-stat-number">${stats.pending}</span>
+                        </div>
+                        <div class="gcal-stat-item" style="color: var(--success)">
+                            <span class="gcal-stat-label">${window.SmartAgenda.I18n.translate('calendar.completed')}</span>
+                            <span class="gcal-stat-number">${stats.completed}</span>
+                        </div>
+                        <div class="gcal-stat-item" style="color: var(--danger)">
+                            <span class="gcal-stat-label">${window.SmartAgenda.I18n.translate('calendar.overdue')}</span>
+                            <span class="gcal-stat-number">${stats.overdue}</span>
+                        </div>
+                    </div>
+
+                    <!-- Compact Calendar Row -->
+                    <div class="gcal-compact-calendar">
+                        <div class="gcal-calendar-nav">
                             <button class="btn-icon" id="prev-month-apt">‹</button>
-                            <h2 class="calendar-title" id="calendar-month-apt">${this.getMonthYearString()}</h2>
+                            <h2 class="gcal-month-title" id="calendar-month-apt">${this.getMonthYearString()}</h2>
                             <button class="btn-icon" id="next-month-apt">›</button>
                         </div>
-                    </div>
-
-                    <div class="calendar-stats">
-                        <div class="stat-card">
-                            <div class="stat-number">${stats.total}</div>
-                            <div class="stat-label">${window.SmartAgenda.I18n.translate('calendar.total')}</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number" style="color: var(--warning)">${stats.pending}</div>
-                            <div class="stat-label">${window.SmartAgenda.I18n.translate('calendar.pending')}</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number" style="color: var(--success)">${stats.completed}</div>
-                            <div class="stat-label">${window.SmartAgenda.I18n.translate('calendar.completed')}</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number" style="color: var(--danger)">${stats.overdue}</div>
-                            <div class="stat-label">${window.SmartAgenda.I18n.translate('calendar.overdue')}</div>
+                        <div class="gcal-mini-grid">
+                            <div class="gcal-mini-weekdays">
+                                <div class="gcal-mini-weekday">S</div>
+                                <div class="gcal-mini-weekday">M</div>
+                                <div class="gcal-mini-weekday">T</div>
+                                <div class="gcal-mini-weekday">W</div>
+                                <div class="gcal-mini-weekday">T</div>
+                                <div class="gcal-mini-weekday">F</div>
+                                <div class="gcal-mini-weekday">S</div>
+                            </div>
+                            <div class="gcal-mini-days" id="calendar-days-apt">
+                                ${this.renderCompactCalendarDays(appointmentsByDate)}
+                            </div>
                         </div>
                     </div>
-
-                    <div class="calendar-grid">
-                        <div class="calendar-weekdays">
-                            <div class="weekday">Sun</div>
-                            <div class="weekday">Mon</div>
-                            <div class="weekday">Tue</div>
-                            <div class="weekday">Wed</div>
-                            <div class="weekday">Thu</div>
-                            <div class="weekday">Fri</div>
-                            <div class="weekday">Sat</div>
-                        </div>
-                        <div class="calendar-days" id="calendar-days-apt">
-                            ${this.renderCalendarDays(appointmentsByDate, 'appointments')}
-                        </div>
-                    </div>
-
-                    <!-- Day Details Section -->
-                    <div id="day-details-container" class="day-details-container"></div>
                 </div>
             `;
 
@@ -141,16 +157,512 @@
                 this.renderAppointmentsCalendar();
             });
 
-
-            // Day click events
-            document.querySelectorAll('.calendar-day').forEach(day => {
+            // Mini calendar day clicks - Open day view modal
+            document.querySelectorAll('.gcal-mini-day:not(.empty)').forEach(day => {
                 day.addEventListener('click', () => {
                     const dateKey = day.dataset.date;
                     if (dateKey) {
-                        this.showDayAppointments(dateKey, appointmentsByDate[dateKey] || []);
+                        this.selectedDate = dateKey;
+                        this.showDayViewModal(dateKey, appointmentsByDate);
                     }
                 });
             });
+        },
+
+        showDayViewModal: function(dateKey, appointmentsByDate) {
+            // Store the active day view for refresh capability
+            window.SmartAgenda._activeDayView = { dateKey, appointmentsByDate };
+
+            const date = new Date(dateKey);
+            const dateStr = date.toLocaleDateString(undefined, {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            const appointments = appointmentsByDate[dateKey] || [];
+
+            // Generate timeline HTML (time slots only)
+            let hoursHtml = '';
+            for (let hour = 0; hour < 24; hour++) {
+                for (let quarter = 0; quarter < 4; quarter++) {
+                    const minute = quarter * 15;
+                    const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+                    const isFullHour = minute === 0;
+                    const slotClass = isFullHour ? 'gcal-time-slot full-hour' : 'gcal-time-slot';
+
+                    hoursHtml += `
+                        <div class="${slotClass}" data-time="${timeStr}" data-date="${dateKey}">
+                            <div class="gcal-time-label">${isFullHour ? timeStr : ''}</div>
+                            <div class="gcal-events-column" data-slot="${timeStr}"></div>
+                        </div>
+                    `;
+                }
+            }
+
+            // Render positioned events
+            const pixelsPerHour = 120;
+            const pixelsPerMinute = pixelsPerHour / 60;
+            let eventsHtml = '';
+            appointments.forEach(apt => {
+                const startDate = this.parseLocalDate(apt.date);
+                const startMinutes = startDate.getHours() * 60 + startDate.getMinutes();
+                const top = startMinutes * pixelsPerMinute;
+
+                let height = 30; // Default height (15 minutes)
+                if (apt.endDate) {
+                    const endDate = this.parseLocalDate(apt.endDate);
+                    const endMinutes = endDate.getHours() * 60 + endDate.getMinutes();
+                    const duration = endMinutes - startMinutes;
+                    height = duration * pixelsPerMinute;
+                }
+
+                eventsHtml += this.renderAgendaEventPositioned(apt, top, height);
+            });
+
+            const content = `
+                <div class="gcal-day-modal-content">
+                    <div class="gcal-day-header">
+                        <h3 class="gcal-day-title">${dateStr}</h3>
+                    </div>
+                    <div class="gcal-timeline-container" id="gcal-timeline" style="position: relative;">
+                        ${hoursHtml}
+                        ${eventsHtml}
+                    </div>
+                </div>
+            `;
+
+            const modal = window.SmartAgenda.UIComponents.showModal({
+                title: 'Day View',
+                content: content,
+                buttons: [
+                    {
+                        label: 'Close',
+                        type: 'secondary',
+                        action: 'close',
+                        onClick: (modal) => window.SmartAgenda.UIComponents.closeModal(modal)
+                    }
+                ],
+                size: 'large',
+                fullHeight: true
+            });
+
+            // Add time block selection functionality
+            this.initTimeBlockSelection(modal, dateKey);
+
+            // Store modal reference for refresh
+            window.SmartAgenda._activeDayViewModal = modal;
+
+            // Bind event clicks
+            modal.querySelectorAll('.gcal-event').forEach(event => {
+                event.addEventListener('click', () => {
+                    const aptId = event.dataset.id;
+                    const apt = window.SmartAgenda.DataManager.getById('appointments', aptId);
+                    if (apt && window.SmartAgenda.Appointments) {
+                        // Mark that we're opening from day view
+                        window.SmartAgenda._fromDayView = true;
+                        window.SmartAgenda.Appointments.showAppointmentModal(apt);
+                    }
+                });
+            });
+
+            // Clear reference when modal closes
+            const originalClose = modal.querySelector('.modal-close');
+            if (originalClose) {
+                originalClose.addEventListener('click', () => {
+                    delete window.SmartAgenda._activeDayView;
+                    delete window.SmartAgenda._activeDayViewModal;
+                    delete window.SmartAgenda._fromDayView;
+                });
+            }
+        },
+
+        refreshDayView: function() {
+            if (!window.SmartAgenda._activeDayView || !window.SmartAgenda._activeDayViewModal) {
+                return;
+            }
+
+            const { dateKey } = window.SmartAgenda._activeDayView;
+            const currentModal = window.SmartAgenda._activeDayViewModal;
+
+            // Clear references BEFORE closing modal (to prevent cleanup from triggering)
+            delete window.SmartAgenda._activeDayView;
+            delete window.SmartAgenda._activeDayViewModal;
+            delete window.SmartAgenda._fromDayView;
+
+            // Get fresh appointments data
+            const appointments = window.SmartAgenda.DataManager.getAll('appointments');
+            const appointmentsByDate = {};
+            appointments.forEach(apt => {
+                const d = this.parseLocalDate(apt.date);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                const key = `${year}-${month}-${day}`;
+                if (!appointmentsByDate[key]) {
+                    appointmentsByDate[key] = [];
+                }
+                appointmentsByDate[key].push(apt);
+            });
+
+            // Close current modal
+            window.SmartAgenda.UIComponents.closeModal(currentModal);
+
+            // Small delay to ensure clean modal closure
+            setTimeout(() => {
+                // Reopen with fresh data
+                this.showDayViewModal(dateKey, appointmentsByDate);
+            }, 50);
+        },
+
+        initTimeBlockSelection: function(modal, dateKey) {
+            const timeline = modal.querySelector('#gcal-timeline');
+            if (!timeline) return;
+
+            let selectedBlock = null;
+            let isDragging = false;
+            let dragHandle = null;
+            let startY = 0;
+            let startTime = null;
+            let endTime = null;
+
+            // Click on time slot to create block
+            modal.querySelectorAll('.gcal-events-column').forEach(column => {
+                column.addEventListener('click', (e) => {
+                    // Don't create block if clicking on existing event
+                    if (e.target.closest('.gcal-event')) return;
+                    // Don't create block if there's already one
+                    if (selectedBlock) return;
+
+                    const slot = column.closest('.gcal-time-slot');
+                    const time = slot.dataset.time;
+                    if (!time) return;
+
+                    // Create time block (default 1 hour)
+                    const [hours, minutes] = time.split(':').map(Number);
+                    startTime = { hours, minutes };
+                    endTime = { hours: hours + 1, minutes };
+
+                    this.renderTimeBlock(timeline, dateKey, startTime, endTime);
+                });
+            });
+        },
+
+        renderTimeBlock: function(timeline, dateKey, startTime, endTime) {
+            // Remove existing block if any
+            const existingBlock = timeline.querySelector('.gcal-time-block');
+            if (existingBlock) existingBlock.remove();
+
+            // Calculate position and height
+            const startMinutes = startTime.hours * 60 + startTime.minutes;
+            const endMinutes = endTime.hours * 60 + endTime.minutes;
+            const duration = endMinutes - startMinutes;
+
+            // Each hour = full-hour slot (60px) + 3 quarter slots (20px each) = 120px total
+            // Each 15-minute slot = 120px / 4 = 30px
+            const pixelsPerHour = 120;
+            const pixelsPerMinute = pixelsPerHour / 60;
+            const top = startMinutes * pixelsPerMinute;
+            const height = duration * pixelsPerMinute;
+
+            const startStr = `${String(startTime.hours).padStart(2, '0')}:${String(startTime.minutes).padStart(2, '0')}`;
+            const endStr = `${String(endTime.hours).padStart(2, '0')}:${String(endTime.minutes).padStart(2, '0')}`;
+
+            const blockHtml = `
+                <div class="gcal-time-block" style="top: ${top}px; height: ${height}px;">
+                    <div class="gcal-resize-handle top"></div>
+                    <div class="gcal-block-content">
+                        <div class="gcal-block-time">${startStr} - ${endStr}</div>
+                        <button class="gcal-block-add-btn" title="Add appointment">+</button>
+                    </div>
+                    <div class="gcal-resize-handle bottom"></div>
+                </div>
+            `;
+
+            // Insert block
+            timeline.insertAdjacentHTML('beforeend', blockHtml);
+
+            const block = timeline.querySelector('.gcal-time-block');
+            this.initBlockInteractions(block, timeline, dateKey, startTime, endTime);
+        },
+
+        initBlockInteractions: function(block, timeline, dateKey, startTime, endTime) {
+            const addBtn = block.querySelector('.gcal-block-add-btn');
+            const topHandle = block.querySelector('.gcal-resize-handle.top');
+            const bottomHandle = block.querySelector('.gcal-resize-handle.bottom');
+
+            // Add button click
+            addBtn.addEventListener('click', () => {
+                // Parse dateKey correctly to avoid timezone issues
+                const [year, month, day] = dateKey.split('-').map(Number);
+                const startDateTime = new Date(year, month - 1, day, startTime.hours, startTime.minutes, 0, 0);
+                const endDateTime = new Date(year, month - 1, day, endTime.hours, endTime.minutes, 0, 0);
+
+                this.showQuickAddWithTimeRange(dateKey, startDateTime, endDateTime);
+            });
+
+            // Resize functionality
+            let isResizing = false;
+            let resizeType = null;
+            let startY = 0;
+            let originalTop = 0;
+            let originalHeight = 0;
+
+            const startResize = (e, type) => {
+                isResizing = true;
+                resizeType = type;
+                startY = e.clientY || e.touches[0].clientY;
+                originalTop = parseInt(block.style.top);
+                originalHeight = parseInt(block.style.height);
+                e.preventDefault();
+                e.stopPropagation();
+            };
+
+            const doResize = (e) => {
+                if (!isResizing) return;
+                const currentY = e.clientY || e.touches[0].clientY;
+                const deltaY = currentY - startY;
+
+                // Snap to 15-minute increments (30px per 15 min)
+                const pixelsPerHour = 120;
+                const pixelsPer15Min = pixelsPerHour / 4; // 30px
+                const pixelsPerMinute = pixelsPerHour / 60; // 2px
+                const snappedDelta = Math.round(deltaY / pixelsPer15Min) * pixelsPer15Min;
+
+                if (resizeType === 'top') {
+                    const newTop = originalTop + snappedDelta;
+                    const newHeight = originalHeight - snappedDelta;
+                    const minDuration = pixelsPer15Min * 2; // Minimum 30 minutes
+                    if (newHeight >= minDuration) {
+                        block.style.top = newTop + 'px';
+                        block.style.height = newHeight + 'px';
+
+                        // Update start time
+                        const newStartMinutes = newTop / pixelsPerMinute;
+                        startTime.hours = Math.floor(newStartMinutes / 60);
+                        startTime.minutes = newStartMinutes % 60;
+                        this.updateBlockTime(block, startTime, endTime);
+                    }
+                } else if (resizeType === 'bottom') {
+                    const newHeight = originalHeight + snappedDelta;
+                    const minDuration = pixelsPer15Min * 2; // Minimum 30 minutes
+                    if (newHeight >= minDuration) {
+                        block.style.height = newHeight + 'px';
+
+                        // Update end time
+                        const totalMinutes = originalTop / pixelsPerMinute + newHeight / pixelsPerMinute;
+                        endTime.hours = Math.floor(totalMinutes / 60);
+                        endTime.minutes = totalMinutes % 60;
+                        this.updateBlockTime(block, startTime, endTime);
+                    }
+                }
+            };
+
+            const endResize = () => {
+                isResizing = false;
+                resizeType = null;
+            };
+
+            topHandle.addEventListener('mousedown', (e) => startResize(e, 'top'));
+            topHandle.addEventListener('touchstart', (e) => startResize(e, 'top'));
+            bottomHandle.addEventListener('mousedown', (e) => startResize(e, 'bottom'));
+            bottomHandle.addEventListener('touchstart', (e) => startResize(e, 'bottom'));
+
+            document.addEventListener('mousemove', doResize);
+            document.addEventListener('touchmove', doResize);
+            document.addEventListener('mouseup', endResize);
+            document.addEventListener('touchend', endResize);
+        },
+
+        updateBlockTime: function(block, startTime, endTime) {
+            const startStr = `${String(startTime.hours).padStart(2, '0')}:${String(startTime.minutes).padStart(2, '0')}`;
+            const endStr = `${String(endTime.hours).padStart(2, '0')}:${String(endTime.minutes).padStart(2, '0')}`;
+            const timeDisplay = block.querySelector('.gcal-block-time');
+            if (timeDisplay) {
+                timeDisplay.textContent = `${startStr} - ${endStr}`;
+            }
+        },
+
+        showQuickAddWithTimeRange: function(dateKey, startDateTime, endDateTime) {
+            // This will use the existing Quick Add but with both start and end times
+            const clients = window.SmartAgenda.DataManager.getAll('clients');
+
+            const content = `
+                <div style="padding: 16px;">
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 500;">Search Client (Optional)</label>
+                        <input type="text" id="quick-client-search" placeholder="Search by name or phone number..."
+                               style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: var(--border-radius-sm); background: var(--background); color: var(--text-primary);">
+                    </div>
+                    <div id="quick-client-results" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+                        <!-- Results will be populated here -->
+                    </div>
+                    <div style="padding-top: 16px; border-top: 1px solid var(--border);">
+                        <button class="btn-primary" id="create-standalone-quick" style="width: 100%;">
+                            Create Without Client
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            const modal = window.SmartAgenda.UIComponents.showModal({
+                title: 'Quick Add',
+                content: content,
+                buttons: [
+                    {
+                        label: 'Cancel',
+                        type: 'secondary',
+                        action: 'cancel',
+                        onClick: (modal) => window.SmartAgenda.UIComponents.closeModal(modal)
+                    }
+                ],
+                size: 'medium'
+            });
+
+            let selectedType = 'appointment';
+            let selectedClientId = null;
+
+            const searchInput = modal.querySelector('#quick-client-search');
+            const resultsContainer = modal.querySelector('#quick-client-results');
+            const standaloneBtn = modal.querySelector('#create-standalone-quick');
+
+            let itemsToShow = 25;
+            let currentSearchTerm = '';
+
+            // Create Load More button
+            const loadMoreBtn = document.createElement('button');
+            loadMoreBtn.type = 'button';
+            loadMoreBtn.className = 'btn-secondary';
+            loadMoreBtn.textContent = 'Φόρτωση περισσότερων...';
+            loadMoreBtn.style.cssText = 'width: 100%; margin-top: 8px; display: none;';
+            standaloneBtn.parentNode.insertBefore(loadMoreBtn, standaloneBtn);
+
+            // Function to render search results
+            const renderResults = (query) => {
+                currentSearchTerm = query;
+                let filtered;
+
+                if (query) {
+                    // When searching, show all results
+                    filtered = clients.filter(c => {
+                        const nameMatch = c.name && c.name.toLowerCase().includes(query.toLowerCase());
+                        const phoneMatch = c.phone && c.phone.includes(query);
+                        return nameMatch || phoneMatch;
+                    });
+                    loadMoreBtn.style.display = 'none';
+                } else {
+                    // When not searching, apply pagination
+                    filtered = clients.slice(0, itemsToShow);
+
+                    // Show/hide Load More button
+                    if (clients.length > itemsToShow) {
+                        loadMoreBtn.style.display = 'block';
+                        loadMoreBtn.textContent = `Φόρτωση περισσότερων (${clients.length - itemsToShow} remaining)`;
+                    } else {
+                        loadMoreBtn.style.display = 'none';
+                    }
+                }
+
+                if (filtered.length === 0) {
+                    resultsContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">No clients found</div>';
+                    return;
+                }
+
+                resultsContainer.innerHTML = filtered.map(client => `
+                    <div class="quick-client-item" data-client-id="${client.id}" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--background); border: 1px solid var(--border); border-radius: var(--border-radius-sm); cursor: pointer; transition: all var(--transition-fast);">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: var(--text-primary);">${this.escapeHtml(client.name)}</div>
+                            ${client.phone ? `<div style="font-size: 13px; color: var(--text-secondary);">${this.escapeHtml(client.phone)}</div>` : ''}
+                        </div>
+                        <div style="color: var(--primary-color);">→</div>
+                    </div>
+                `).join('');
+
+                // Bind click events
+                modal.querySelectorAll('.quick-client-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        selectedClientId = item.dataset.clientId;
+                        window.SmartAgenda.UIComponents.closeModal(modal);
+                        this.createQuickEntryWithTimeRange(selectedType, selectedClientId, startDateTime, endDateTime);
+                    });
+
+                    // Hover effect
+                    item.addEventListener('mouseenter', function() {
+                        this.style.borderColor = 'var(--primary-color)';
+                        this.style.background = 'var(--surface)';
+                    });
+                    item.addEventListener('mouseleave', function() {
+                        this.style.borderColor = 'var(--border)';
+                        this.style.background = 'var(--background)';
+                    });
+                });
+            };
+
+            // Load More button click
+            loadMoreBtn.addEventListener('click', () => {
+                itemsToShow += 25;
+                renderResults(currentSearchTerm);
+            });
+
+            // Initial render
+            renderResults('');
+
+            // Search input listener
+            let searchTimeout = null;
+            let isComposing = false;
+
+            searchInput.addEventListener('compositionstart', () => {
+                isComposing = true;
+            });
+
+            searchInput.addEventListener('compositionend', (e) => {
+                isComposing = false;
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    renderResults(e.target.value);
+                }, 100);
+            });
+
+            searchInput.addEventListener('input', (e) => {
+                if (isComposing) return;
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    renderResults(e.target.value);
+                }, 300);
+            });
+
+            // Standalone button
+            standaloneBtn.addEventListener('click', () => {
+                window.SmartAgenda.UIComponents.closeModal(modal);
+                this.createQuickEntryWithTimeRange(selectedType, null, startDateTime, endDateTime);
+            });
+        },
+
+        toLocalISOString: function(date) {
+            // Convert Date to ISO string format WITHOUT timezone conversion
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000`;
+        },
+
+        createQuickEntryWithTimeRange: function(type, clientId, startDateTime, endDateTime) {
+            // Only handle appointments
+            if (type === 'appointment' && window.SmartAgenda.Appointments) {
+                // Store the time range for the appointment modal to use (as local time, not UTC)
+                window.SmartAgenda._tempTimeRange = {
+                    start: this.toLocalISOString(startDateTime),
+                    end: this.toLocalISOString(endDateTime)
+                };
+                // Mark that we're opening from day view
+                window.SmartAgenda._fromDayView = true;
+                window.SmartAgenda.Appointments.showAppointmentModal(null, clientId, this.toLocalISOString(startDateTime));
+            }
         },
 
         showDayAppointments: function(dateKey, appointments) {
@@ -167,8 +679,7 @@
                     <div style="margin-bottom: 16px;">
                         <h3 style="margin: 0 0 12px 0; color: var(--text-primary);">${dateStr}</h3>
                         <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                            <button class="btn-primary" id="create-apt-for-day" style="flex: 1;">+ Create Appointment</button>
-                            <button class="btn-secondary" id="create-task-for-day" style="flex: 1;">+ Create Task</button>
+                            <button class="btn-primary" id="create-apt-for-day" style="width: 100%;">+ Create Appointment</button>
                         </div>
                     </div>
             `;
@@ -182,11 +693,11 @@
             } else {
                 content += '<div class="appointments-list" style="display: flex; flex-direction: column; gap: 12px;">';
                 appointments.forEach(apt => {
-                    const time = new Date(apt.date).toLocaleTimeString(undefined, {
+                    const time = this.parseLocalDate(apt.date).toLocaleTimeString(undefined, {
                         hour: '2-digit',
                         minute: '2-digit'
                     });
-                    const statusClass = apt.completed ? 'completed' : (new Date(apt.date) < new Date() ? 'overdue' : 'pending');
+                    const statusClass = apt.completed ? 'completed' : (this.parseLocalDate(apt.date) < new Date() ? 'overdue' : 'pending');
                     const statusColors = {
                         completed: '#10b981',
                         overdue: '#ef4444',
@@ -230,13 +741,6 @@
                 window.SmartAgenda.UIComponents.closeModal(modal);
                 if (window.SmartAgenda.Appointments) {
                     this.showCreateAppointmentWithSearch(dateKey);
-                }
-            });
-
-            modal.querySelector('#create-task-for-day')?.addEventListener('click', () => {
-                window.SmartAgenda.UIComponents.closeModal(modal);
-                if (window.SmartAgenda.Tasks) {
-                    this.showCreateTaskWithSearch(dateKey);
                 }
             });
 
@@ -384,6 +888,153 @@
                     window.SmartAgenda.Appointments.showAppointmentModal(null, null, dateKey);
                 }
             });
+        },
+
+        showQuickAddAppointment: function(dateKey, timeStr) {
+            const clients = window.SmartAgenda.DataManager.getAll('clients');
+
+            // Parse date and time
+            const date = new Date(dateKey);
+            let dateTimeStr = dateKey;
+            if (timeStr) {
+                const [hours, minutes] = timeStr.split(':');
+                date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                dateTimeStr = date.toISOString();
+            }
+
+            const content = `
+                <div style="padding: 16px;">
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 500;">Search Client (Optional)</label>
+                        <input type="text" id="quick-client-search" placeholder="Search by name or phone number..."
+                               style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: var(--border-radius-sm); background: var(--background); color: var(--text-primary);">
+                    </div>
+                    <div id="quick-client-results" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+                        <!-- Results will be populated here -->
+                    </div>
+                    <div style="padding-top: 16px; border-top: 1px solid var(--border);">
+                        <button class="btn-primary" id="create-standalone-quick" style="width: 100%;">
+                            Create Without Client
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            const modal = window.SmartAgenda.UIComponents.showModal({
+                title: 'Quick Add',
+                content: content,
+                buttons: [
+                    {
+                        label: 'Cancel',
+                        type: 'secondary',
+                        action: 'cancel',
+                        onClick: (modal) => window.SmartAgenda.UIComponents.closeModal(modal)
+                    }
+                ],
+                size: 'medium'
+            });
+
+            let selectedType = 'appointment';
+            let selectedClientId = null;
+
+            const searchInput = modal.querySelector('#quick-client-search');
+            const resultsContainer = modal.querySelector('#quick-client-results');
+            const standaloneBtn = modal.querySelector('#create-standalone-quick');
+
+            // Function to render search results
+            const renderResults = (query) => {
+                const filtered = query ? clients.filter(c => {
+                    const nameMatch = c.name && c.name.toLowerCase().includes(query.toLowerCase());
+                    const phoneMatch = c.phone && c.phone.includes(query);
+                    return nameMatch || phoneMatch;
+                }) : clients.slice(0, 10);
+
+                if (filtered.length === 0) {
+                    resultsContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">No clients found</div>';
+                    return;
+                }
+
+                resultsContainer.innerHTML = filtered.map(client => `
+                    <div class="quick-client-item" data-client-id="${client.id}" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--background); border: 1px solid var(--border); border-radius: var(--border-radius-sm); cursor: pointer; transition: all var(--transition-fast);">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; color: var(--text-primary);">${this.escapeHtml(client.name)}</div>
+                            ${client.phone ? `<div style="font-size: 13px; color: var(--text-secondary);">${this.escapeHtml(client.phone)}</div>` : ''}
+                        </div>
+                        <div style="color: var(--primary-color);">→</div>
+                    </div>
+                `).join('');
+
+                // Bind click events
+                modal.querySelectorAll('.quick-client-item').forEach(item => {
+                    item.addEventListener('click', () => {
+                        selectedClientId = item.dataset.clientId;
+                        window.SmartAgenda.UIComponents.closeModal(modal);
+                        this.createQuickEntry(selectedType, selectedClientId, dateTimeStr, timeStr);
+                    });
+
+                    // Hover effect
+                    item.addEventListener('mouseenter', function() {
+                        this.style.borderColor = 'var(--primary-color)';
+                        this.style.background = 'var(--surface)';
+                    });
+                    item.addEventListener('mouseleave', function() {
+                        this.style.borderColor = 'var(--border)';
+                        this.style.background = 'var(--background)';
+                    });
+                });
+            };
+
+            // Initial render
+            renderResults('');
+
+            // Search input listener
+            let searchTimeout = null;
+            let isComposing = false;
+
+            searchInput.addEventListener('compositionstart', () => {
+                isComposing = true;
+            });
+
+            searchInput.addEventListener('compositionend', (e) => {
+                isComposing = false;
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    renderResults(e.target.value);
+                }, 100);
+            });
+
+            searchInput.addEventListener('input', (e) => {
+                if (isComposing) return;
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    renderResults(e.target.value);
+                }, 300);
+            });
+
+            // Standalone button
+            standaloneBtn.addEventListener('click', () => {
+                window.SmartAgenda.UIComponents.closeModal(modal);
+                this.createQuickEntry(selectedType, null, dateTimeStr, timeStr);
+            });
+        },
+
+        createQuickEntry: function(type, clientId, dateTimeStr, timeStr) {
+            if (type === 'appointment' && window.SmartAgenda.Appointments) {
+                window.SmartAgenda.Appointments.showAppointmentModal(null, clientId, dateTimeStr);
+            } else if (type === 'task' && window.SmartAgenda.Tasks) {
+                window.SmartAgenda.Tasks.showTaskModal(null, clientId, dateTimeStr);
+            } else if (type === 'interaction' && window.SmartAgenda.Clients) {
+                // Interactions are typically added from client details
+                if (clientId) {
+                    const client = window.SmartAgenda.DataManager.getById('clients', clientId);
+                    if (client) {
+                        // You may want to add a showInteractionModal function
+                        window.SmartAgenda.Toast.info('Please add interactions from the client details page.');
+                    }
+                } else {
+                    window.SmartAgenda.Toast.info('Please select a client to add an interaction.');
+                }
+            }
         },
 
         showCreateTaskWithSearch: function(dateKey) {
@@ -693,6 +1344,221 @@
         },
 
         // ============================================
+        // Compact Calendar Rendering
+        // ============================================
+
+        renderCompactCalendarDays: function(appointmentsByDate) {
+            const firstDay = new Date(this.currentYear, this.currentMonth, 1);
+            const lastDay = new Date(this.currentYear, this.currentMonth + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startingDayOfWeek = firstDay.getDay();
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const selectedDate = this.selectedDate ? new Date(this.selectedDate) : null;
+            if (selectedDate) selectedDate.setHours(0, 0, 0, 0);
+
+            let html = '';
+
+            // Empty cells before first day
+            for (let i = 0; i < startingDayOfWeek; i++) {
+                html += '<div class="gcal-mini-day empty"></div>';
+            }
+
+            // Days of month
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(this.currentYear, this.currentMonth, day);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const dayStr = String(date.getDate()).padStart(2, '0');
+                const dateKey = `${year}-${month}-${dayStr}`;
+                const isToday = date.getTime() === today.getTime();
+                const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
+
+                const appointments = appointmentsByDate[dateKey] || [];
+                const count = appointments.length;
+
+                let dayClass = 'gcal-mini-day';
+                if (isToday) dayClass += ' today';
+                if (isSelected) dayClass += ' selected';
+                if (count > 0) dayClass += ' has-events';
+
+                // Create preview text (first 5 appointments in portrait, all in landscape)
+                let previewHtml = '';
+                if (count > 0) {
+                    const isLandscape = window.matchMedia('(orientation: landscape)').matches;
+                    const maxPreview = isLandscape ? appointments.length : Math.min(5, appointments.length);
+
+                    const previews = appointments.slice(0, maxPreview).map(apt => {
+                        const name = apt.clientName || 'Untitled';
+                        // Return full name - CSS will handle text overflow
+                        return name;
+                    });
+
+                    previewHtml = `
+                        <div class="gcal-mini-preview">
+                            ${previews.map(p => `<div class="gcal-preview-item">${this.escapeHtml(p)}</div>`).join('')}
+                        </div>
+                    `;
+                }
+
+                html += `
+                    <div class="${dayClass}" data-date="${dateKey}">
+                        <div class="gcal-mini-day-header">
+                            <span class="gcal-mini-day-num">${day}</span>
+                            ${count > 0 ? `<span class="gcal-mini-count">${count}</span>` : ''}
+                        </div>
+                        ${previewHtml}
+                    </div>
+                `;
+            }
+
+            return html;
+        },
+
+        // ============================================
+        // Day/Agenda View (Google Calendar Style)
+        // ============================================
+
+        renderDayAgendaView: function(dateKey, appointmentsByDate) {
+            const date = new Date(dateKey);
+            const dateStr = date.toLocaleDateString(undefined, {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            const appointments = appointmentsByDate[dateKey] || [];
+
+            // Group appointments by hour
+            const appointmentsByHour = {};
+            appointments.forEach(apt => {
+                const aptDate = this.parseLocalDate(apt.date);
+                const hour = aptDate.getHours();
+                const minute = aptDate.getMinutes();
+                const quarterSlot = Math.floor(minute / 15); // 0, 1, 2, 3
+                const slotKey = `${hour}:${quarterSlot * 15}`;
+
+                if (!appointmentsByHour[slotKey]) {
+                    appointmentsByHour[slotKey] = [];
+                }
+                appointmentsByHour[slotKey].push(apt);
+            });
+
+            // Generate 24 hours with 15-minute intervals
+            let hoursHtml = '';
+            for (let hour = 0; hour < 24; hour++) {
+                for (let quarter = 0; quarter < 4; quarter++) {
+                    const minute = quarter * 15;
+                    const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+                    const slotKey = `${hour}:${minute}`;
+                    const slotAppointments = appointmentsByHour[slotKey] || [];
+
+                    const isFullHour = minute === 0;
+                    const slotClass = isFullHour ? 'gcal-time-slot full-hour' : 'gcal-time-slot';
+
+                    hoursHtml += `
+                        <div class="${slotClass}" data-time="${timeStr}" data-date="${dateKey}">
+                            <div class="gcal-time-label">${isFullHour ? timeStr : ''}</div>
+                            <div class="gcal-events-column">
+                                ${slotAppointments.map(apt => this.renderAgendaEvent(apt)).join('')}
+                                ${slotAppointments.length === 0 && isFullHour ? `<div class="gcal-empty-slot"></div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            return `
+                <div class="gcal-day-header">
+                    <h3 class="gcal-day-title">${dateStr}</h3>
+                    <button class="btn-primary" id="quick-add-apt">+ Quick Add</button>
+                </div>
+                <div class="gcal-timeline-container">
+                    ${hoursHtml}
+                </div>
+            `;
+        },
+
+        renderAgendaEvent: function(apt) {
+            const startDate = this.parseLocalDate(apt.date);
+            const endDate = apt.endDate ? this.parseLocalDate(apt.endDate) : null;
+
+            const time = startDate.toLocaleTimeString(undefined, {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            // Calculate duration if endDate exists
+            let durationText = '';
+            if (endDate) {
+                const endTime = endDate.toLocaleTimeString(undefined, {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                durationText = `${time} - ${endTime}`;
+            } else {
+                durationText = time;
+            }
+
+            const statusClass = apt.completed ? 'completed' : (startDate < new Date() ? 'overdue' : 'pending');
+            const statusColors = {
+                completed: '#10b981',
+                overdue: '#ef4444',
+                pending: '#3b82f6'
+            };
+
+            return `
+                <div class="gcal-event" data-id="${apt.id}" style="border-left: 3px solid ${statusColors[statusClass]}">
+                    <div class="gcal-event-time">${durationText}</div>
+                    <div class="gcal-event-title">${this.escapeHtml(apt.clientName || 'Untitled')}</div>
+                    ${apt.desc ? `<div class="gcal-event-desc">${this.escapeHtml(this.stripHtml(apt.desc).substring(0, 50))}...</div>` : ''}
+                </div>
+            `;
+        },
+
+        renderAgendaEventPositioned: function(apt, top, height) {
+            const startDate = this.parseLocalDate(apt.date);
+            const endDate = apt.endDate ? this.parseLocalDate(apt.endDate) : null;
+
+            const time = startDate.toLocaleTimeString(undefined, {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            // Calculate duration if endDate exists
+            let durationText = '';
+            if (endDate) {
+                const endTime = endDate.toLocaleTimeString(undefined, {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                durationText = `${time} - ${endTime}`;
+            } else {
+                durationText = time;
+            }
+
+            const statusClass = apt.completed ? 'completed' : (startDate < new Date() ? 'overdue' : 'pending');
+            const statusColors = {
+                completed: '#10b981',
+                overdue: '#ef4444',
+                pending: '#3b82f6'
+            };
+
+            return `
+                <div class="gcal-event gcal-event-positioned"
+                     data-id="${apt.id}"
+                     style="position: absolute; left: 60px; right: 8px; top: ${top}px; height: ${height}px; border-left: 3px solid ${statusColors[statusClass]}; z-index: 5;">
+                    <div class="gcal-event-time">${durationText}</div>
+                    <div class="gcal-event-title">${this.escapeHtml(apt.clientName || 'Untitled')}</div>
+                    ${apt.desc && height > 60 ? `<div class="gcal-event-desc">${this.escapeHtml(this.stripHtml(apt.desc).substring(0, 50))}...</div>` : ''}
+                </div>
+            `;
+        },
+
+        // ============================================
         // Calendar Rendering
         // ============================================
 
@@ -730,9 +1596,9 @@
                 let dataDisplay = '';
                 if (viewType === 'appointments' && data) {
                     const count = data.length;
-                    const hasOverdue = data.some(apt => !apt.completed && new Date(apt.date) < new Date());
+                    const hasOverdue = data.some(apt => !apt.completed && this.parseLocalDate(apt.date) < new Date());
                     const allCompleted = data.every(apt => apt.completed);
-                    
+
                     let indicatorClass = 'appointment-indicator';
                     if (hasOverdue) indicatorClass += ' overdue';
                     else if (allCompleted) indicatorClass += ' completed';
@@ -759,6 +1625,25 @@
         // Data Processing
         // ============================================
 
+        parseLocalDate: function(dateStr) {
+            // Parse date string as local time (no timezone conversion)
+            // Format: "2024-12-13T01:00:00.000" or "2024-12-13T01:00:00"
+            if (!dateStr) return null;
+
+            const [datepart, timepart] = dateStr.split('T');
+            const [year, month, day] = datepart.split('-').map(Number);
+
+            if (timepart) {
+                const timeParts = timepart.split(':');
+                const hours = parseInt(timeParts[0], 10);
+                const minutes = parseInt(timeParts[1], 10);
+                const seconds = timeParts[2] ? parseInt(timeParts[2].split('.')[0], 10) : 0;
+                return new Date(year, month - 1, day, hours, minutes, seconds);
+            }
+
+            return new Date(year, month - 1, day);
+        },
+
         groupAppointmentsByDate: function(appointments) {
             const grouped = {};
 
@@ -766,7 +1651,7 @@
             appointments.forEach(apt => {
                 if (!apt.date) return;
 
-                const date = new Date(apt.date);
+                const date = this.parseLocalDate(apt.date);
                 if (date.getMonth() === this.currentMonth && date.getFullYear() === this.currentYear) {
                     // Use LOCAL date for grouping, not UTC
                     const year = date.getFullYear();
@@ -793,7 +1678,7 @@
                 // Include if completed OR payment status is paid or partial
                 if (!apt.completed && apt.paid !== 'paid' && apt.paid !== 'partial') return;
 
-                const date = new Date(apt.date);
+                const date = this.parseLocalDate(apt.date);
                 if (date.getMonth() === this.currentMonth && date.getFullYear() === this.currentYear) {
                     // Use LOCAL date for grouping, not UTC
                     const year = date.getFullYear();
@@ -821,7 +1706,9 @@
 
             // Process tasks - COMPLETED or PAID
             tasks.forEach(task => {
-                if (!task.date || !task.amount) return;
+                if (!task.amount) return;
+                if (!task.date) return; // Skip tasks without a date
+
                 // Include if completed OR payment status is paid
                 if (!task.completed && task.paid !== 'paid') return;
 
@@ -854,15 +1741,15 @@
 
             const monthAppointments = appointments.filter(apt => {
                 if (!apt.date) return false;
-                const date = new Date(apt.date);
+                const date = this.parseLocalDate(apt.date);
                 return date >= monthStart && date <= monthEnd;
             });
 
             return {
                 total: monthAppointments.length,
-                pending: monthAppointments.filter(apt => !apt.completed && new Date(apt.date) >= now).length,
+                pending: monthAppointments.filter(apt => !apt.completed && this.parseLocalDate(apt.date) >= now).length,
                 completed: monthAppointments.filter(apt => apt.completed).length,
-                overdue: monthAppointments.filter(apt => !apt.completed && new Date(apt.date) < now).length
+                overdue: monthAppointments.filter(apt => !apt.completed && this.parseLocalDate(apt.date) < now).length
             };
         },
 
@@ -878,7 +1765,7 @@
             // Process appointments
             appointments.forEach(apt => {
                 if (!apt.date || !apt.amount) return;
-                const date = new Date(apt.date);
+                const date = this.parseLocalDate(apt.date);
                 if (date >= monthStart && date <= monthEnd) {
                     const amount = parseFloat(apt.amount);
                     // Count as completed if marked completed OR payment status is paid
@@ -901,7 +1788,9 @@
 
             // Process tasks
             tasks.forEach(task => {
-                if (!task.date || !task.amount) return;
+                if (!task.amount) return;
+                if (!task.date) return; // Skip tasks without a date
+
                 const date = new Date(task.date);
                 if (date >= monthStart && date <= monthEnd) {
                     const amount = parseFloat(task.amount);
@@ -950,6 +1839,407 @@
     // Add styles
     const styles = document.createElement('style');
     styles.textContent = `
+        /* Google Calendar Style Container */
+        .gcal-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            height: 100%;
+        }
+
+        /* Compact Stats Row */
+        .gcal-compact-stats {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            background: var(--surface);
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--border);
+            overflow-x: auto;
+        }
+
+        .gcal-stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            min-width: 80px;
+        }
+
+        .gcal-stat-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .gcal-stat-number {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        /* Compact Calendar */
+        .gcal-compact-calendar {
+            background: var(--surface);
+            border-radius: var(--border-radius-sm);
+            padding: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .gcal-calendar-nav {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+
+        .gcal-month-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .gcal-mini-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .gcal-mini-weekdays {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+
+        .gcal-mini-weekday {
+            text-align: center;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            padding: 4px;
+        }
+
+        .gcal-mini-days {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+
+        .gcal-mini-day {
+            min-height: 45px;
+            padding: 4px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            background: var(--background);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .gcal-mini-day.empty {
+            background: transparent;
+            border: none;
+            cursor: default;
+        }
+
+        .gcal-mini-day:not(.empty):hover {
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .gcal-mini-day.today {
+            background: var(--primary-color)11;
+            border-color: var(--primary-color);
+        }
+
+        .gcal-mini-day.selected {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .gcal-mini-day.has-events {
+            background: var(--surface);
+        }
+
+        .gcal-mini-day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2px;
+        }
+
+        .gcal-mini-day-num {
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .gcal-mini-count {
+            font-size: 9px;
+            background: var(--primary-color)22;
+            color: var(--primary-color);
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
+
+        .gcal-mini-day.selected .gcal-mini-count {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+
+        .gcal-mini-preview {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            margin-top: 2px;
+        }
+
+        .gcal-preview-item {
+            font-size: 9px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-secondary);
+            background: var(--background);
+            padding: 1px 2px;
+            border-radius: 2px;
+        }
+
+        .gcal-mini-day.selected .gcal-preview-item {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        /* Day/Agenda View */
+        .gcal-day-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--surface);
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+
+        .gcal-day-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            gap: 16px;
+        }
+
+        .gcal-day-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .gcal-timeline-container {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .gcal-time-slot {
+            display: grid;
+            grid-template-columns: 60px 1fr;
+            min-height: 20px;
+            border-bottom: 1px solid var(--border);
+            transition: background-color var(--transition-fast);
+        }
+
+        .gcal-time-slot.full-hour {
+            min-height: 60px;
+            border-bottom: 1px solid var(--border-hover);
+        }
+
+        .gcal-time-slot:hover {
+            background: var(--background);
+        }
+
+        .gcal-time-label {
+            padding: 4px 8px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-align: right;
+            border-right: 1px solid var(--border);
+        }
+
+        .gcal-events-column {
+            padding: 2px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .gcal-empty-slot {
+            min-height: 40px;
+        }
+
+        .gcal-event {
+            padding: 8px;
+            background: var(--background);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            border-left: 3px solid var(--primary-color);
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--primary-color);
+        }
+
+        .gcal-event:hover {
+            box-shadow: var(--shadow-sm);
+            transform: translateY(-1px);
+        }
+
+        .gcal-event-time {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+
+        .gcal-event-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .gcal-event-desc {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        /* Time Block Selection (Google Calendar Style) */
+        .gcal-timeline-container {
+            position: relative;
+        }
+
+        .gcal-time-block {
+            position: absolute;
+            left: 60px;
+            right: 8px;
+            background: var(--primary-color)22;
+            border: 2px solid var(--primary-color);
+            border-radius: 4px;
+            z-index: 10;
+            cursor: move;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .gcal-resize-handle {
+            width: 100%;
+            height: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: ns-resize;
+            position: relative;
+            z-index: 11;
+        }
+
+        .gcal-resize-handle::before {
+            content: '';
+            width: 30px;
+            height: 4px;
+            background: var(--primary-color);
+            border-radius: 2px;
+            opacity: 0.7;
+        }
+
+        .gcal-resize-handle:hover::before {
+            opacity: 1;
+            height: 6px;
+        }
+
+        .gcal-resize-handle.top {
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+        }
+
+        .gcal-resize-handle.bottom {
+            border-bottom-left-radius: 4px;
+            border-bottom-right-radius: 4px;
+        }
+
+        .gcal-block-content {
+            flex: 1;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: flex-start;
+            position: relative;
+        }
+
+        .gcal-block-time {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary-color);
+            background: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .gcal-block-add-btn {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            background: var(--primary-color);
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--shadow);
+            transition: all var(--transition-fast);
+            z-index: 12;
+        }
+
+        .gcal-block-add-btn:hover {
+            transform: scale(1.1);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .gcal-block-add-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Day Modal Styles */
+        .gcal-day-modal-content {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            max-height: 80vh;
+        }
+
+        .gcal-day-modal-content .gcal-day-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .gcal-day-modal-content .gcal-timeline-container {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* OLD CALENDAR STYLES (kept for finance calendar) */
         .calendar-container { display: flex; flex-direction: column; gap: 24px; }
         .calendar-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
         .calendar-nav { display: flex; align-items: center; gap: 16px; }
@@ -1001,7 +2291,41 @@
         .stat-card { text-align: center; }
         .stat-number { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
         .stat-label { font-size: 13px; color: var(--text-secondary); }
+
+        /* Landscape support */
+        @media (orientation: landscape) {
+            .gcal-mini-day {
+                min-height: 60px;
+            }
+            .gcal-preview-item {
+                font-size: 10px;
+            }
+        }
+
+        /* Mobile responsive */
         @media (max-width: 768px) {
+            .gcal-compact-stats {
+                padding: 8px;
+            }
+            .gcal-stat-item {
+                min-width: 70px;
+            }
+            .gcal-stat-label {
+                font-size: 10px;
+            }
+            .gcal-stat-number {
+                font-size: 16px;
+            }
+            .gcal-mini-day {
+                min-height: 40px;
+            }
+            .gcal-day-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .gcal-day-title {
+                font-size: 16px;
+            }
             .calendar-header { flex-direction: column; align-items: stretch; }
             .calendar-nav { justify-content: center; }
             .calendar-actions { width: 100%; }

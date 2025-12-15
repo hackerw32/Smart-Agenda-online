@@ -540,13 +540,32 @@
             const clientsWithLocation = clients.filter(c => c.lat && c.lng);
             console.log('[Maps] Clients with location data:', clientsWithLocation.length);
 
-            clients.forEach(client => {
-                if (client.lat && client.lng) {
-                    this.addClientMarker(client);
-                }
-            });
+            // Load markers in batches to improve performance with many clients
+            const BATCH_SIZE = 50;
+            let currentBatch = 0;
 
-            console.log(`[Maps] ✅ Loaded ${this.clientMarkers.length} client markers on map`);
+            const loadBatch = () => {
+                const startIdx = currentBatch * BATCH_SIZE;
+                const endIdx = Math.min(startIdx + BATCH_SIZE, clientsWithLocation.length);
+
+                for (let i = startIdx; i < endIdx; i++) {
+                    const client = clientsWithLocation[i];
+                    if (client.lat && client.lng) {
+                        this.addClientMarker(client);
+                    }
+                }
+
+                currentBatch++;
+
+                if (endIdx < clientsWithLocation.length) {
+                    // Load next batch with a small delay to avoid blocking UI
+                    setTimeout(() => loadBatch(), 50);
+                } else {
+                    console.log(`[Maps] ✅ Loaded ${this.clientMarkers.length} client markers on map`);
+                }
+            };
+
+            loadBatch();
         },
 
         addClientMarker: function(client) {
@@ -577,12 +596,15 @@
                 }
             }
 
+            // Only use animation if there are few markers (to avoid performance issues)
+            const useAnimation = this.clientMarkers.length < 50;
+
             const marker = new google.maps.Marker({
                 position: position,
                 map: this.map,
                 title: client.name,
                 icon: this.createMarkerIcon(markerColor),
-                animation: google.maps.Animation.DROP
+                animation: useAnimation ? google.maps.Animation.DROP : null
             });
 
             // Store client data with marker
@@ -646,8 +668,24 @@
             // Get client photo
             const clientPhoto = client.photo;
             const clientInitial = client.name ? client.name.charAt(0).toUpperCase() : '?';
-            const avatarColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
-            const avatarColor = avatarColors[client.name.charCodeAt(0) % avatarColors.length];
+
+            // Get avatar color from client's primary type (same as marker color)
+            let avatarColor = '#94a3b8'; // Default gray
+            const availableTypes = window.SmartAgenda?.Settings?.getClientTypes() || [];
+
+            if (client.clientTypes && client.clientTypes.length > 0) {
+                const primaryTypeId = client.primaryType || client.clientTypes[0];
+                const primaryType = availableTypes.find(t => t.id === primaryTypeId);
+                if (primaryType) {
+                    avatarColor = primaryType.color;
+                }
+            } else if (client.customerType) {
+                // Legacy support
+                const type = availableTypes.find(t => t.id === client.customerType);
+                if (type) {
+                    avatarColor = type.color;
+                }
+            }
 
             return `
                 <div style="background: ${bgColor}; color: ${textColor}; padding: 0; max-width: 300px; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);">
@@ -710,6 +748,38 @@
                                 </div>
                             ` : ''}
                         </div>
+
+                        <!-- Client Types -->
+                        ${(() => {
+                            // Get client's types
+                            let clientTypesList = [];
+                            if (client.clientTypes && Array.isArray(client.clientTypes)) {
+                                clientTypesList = client.clientTypes;
+                            } else if (client.customerType) {
+                                clientTypesList = [client.customerType];
+                            }
+
+                            if (clientTypesList.length > 0 && availableTypes.length > 0) {
+                                const primaryTypeId = client.primaryType || clientTypesList[0];
+                                const typesBadges = clientTypesList.map(typeId => {
+                                    const type = availableTypes.find(t => t.id === typeId);
+                                    if (!type) return '';
+                                    const isPrimary = typeId === primaryTypeId;
+                                    return `
+                                        <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: ${type.color}22; border: 1px solid ${type.color}; border-radius: 12px; font-size: 11px; font-weight: 600; color: ${type.color};">
+                                            ${isPrimary ? '⭐' : ''}<span style="width: 8px; height: 8px; border-radius: 50%; background: ${type.color};"></span>${this.escapeHtml(type.name)}
+                                        </span>
+                                    `;
+                                }).join('');
+
+                                return `
+                                    <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+                                        ${typesBadges}
+                                    </div>
+                                `;
+                            }
+                            return '';
+                        })()}
 
                         <!-- Location Notes -->
                         ${locationNotes ? `
@@ -1589,14 +1659,11 @@
 
             // Bind type filter options (checkboxes for multiple selection)
             modal.querySelectorAll('.filter-type-option').forEach(option => {
-                option.addEventListener('click', (e) => {
-                    if (e.target.type === 'checkbox') return; // Let checkbox handle itself
-
+                const updateFilterState = () => {
                     const checkbox = option.querySelector('input[type="checkbox"]');
-                    checkbox.checked = !checkbox.checked;
-
                     const typeId = option.dataset.typeId;
-                    let newSelectedTypes = [...selectedTypes];
+                    // FIX: Use current filter state instead of initial snapshot
+                    let newSelectedTypes = Array.isArray(this.currentFilter) && this.currentFilter !== 'all' ? [...this.currentFilter] : [];
 
                     if (checkbox.checked) {
                         if (!newSelectedTypes.includes(typeId)) {
@@ -1634,7 +1701,23 @@
                         allOption.style.background = 'var(--surface)';
                         allOption.style.borderColor = 'var(--border)';
                     }
+                };
+
+                // Handle click on the option div
+                option.addEventListener('click', (e) => {
+                    if (e.target.type === 'checkbox') return; // Let checkbox handle itself
+                    const checkbox = option.querySelector('input[type="checkbox"]');
+                    checkbox.checked = !checkbox.checked;
+                    updateFilterState();
                 });
+
+                // Handle direct click on checkbox
+                const checkbox = option.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    checkbox.addEventListener('change', () => {
+                        updateFilterState();
+                    });
+                }
             });
         },
 
@@ -1652,21 +1735,11 @@
             try {
                 const position = await this.getUserPosition();
 
-                const checkIn = {
-                    id: Date.now().toString(),
-                    clientId: clientId,
-                    clientName: client.name,
-                    timestamp: new Date().toISOString(),
-                    userLat: position?.lat || null,
-                    userLng: position?.lng || null,
-                    notes: ''
-                };
-
                 // Ask for notes
                 const content = `
                     <div style="padding: 16px;">
                         <div style="margin-bottom: 16px;">
-                            <strong>Check-in at: ${client.name}</strong>
+                            <strong>Check-in at: ${this.escapeHtml(client.name)}</strong>
                         </div>
                         <label style="display: block; margin-bottom: 8px; font-weight: 500;">Visit Notes</label>
                         <textarea id="checkin-notes"
@@ -1682,14 +1755,36 @@
                         {
                             label: 'Cancel',
                             type: 'secondary',
+                            action: 'cancel',
                             onClick: (modal) => window.SmartAgenda.UIComponents.closeModal(modal)
                         },
                         {
                             label: 'Check In',
                             type: 'primary',
+                            action: 'checkin',
                             onClick: (modal) => {
-                                checkIn.notes = document.getElementById('checkin-notes')?.value || '';
-                                this.saveCheckIn(checkIn);
+                                const notes = document.getElementById('checkin-notes')?.value || '';
+
+                                // Create interaction instead of old check-in
+                                const interaction = {
+                                    id: Date.now().toString(),
+                                    clientId: clientId,
+                                    type: 'checkin',
+                                    date: new Date().toISOString(),
+                                    notes: notes,
+                                    userLat: position?.lat || null,
+                                    userLng: position?.lng || null,
+                                    createdAt: new Date().toISOString()
+                                };
+
+                                window.SmartAgenda.DataManager.add('interactions', interaction);
+
+                                // Update client's lastContact
+                                window.SmartAgenda.DataManager.update('clients', clientId, {
+                                    lastContact: interaction.date,
+                                    lastVisit: interaction.date
+                                });
+
                                 window.SmartAgenda.UIComponents.closeModal(modal);
                                 window.SmartAgenda.Toast.success('Checked in successfully!');
                             }
@@ -1702,22 +1797,6 @@
                 console.error('Check-in error:', error);
                 window.SmartAgenda.Toast.error('Check-in failed');
             }
-        },
-
-        saveCheckIn: function(checkIn) {
-            this.checkIns.push(checkIn);
-
-            // Save to localStorage
-            try {
-                localStorage.setItem('checkInHistory', JSON.stringify(this.checkIns));
-            } catch (error) {
-                console.error('Error saving check-in:', error);
-            }
-
-            // Update client with last visit date
-            window.SmartAgenda.DataManager.update('clients', checkIn.clientId, {
-                lastVisit: checkIn.timestamp
-            });
         },
 
         loadCheckInHistory: function() {
@@ -1908,18 +1987,11 @@
         openClientDetails: function(clientId) {
             this.infoWindow.close();
 
-            // Switch to clients tab
-            if (window.SmartAgenda?.Navigation) {
-                window.SmartAgenda.Navigation.switchTab('clients');
+            // Open client detail view (not edit modal)
+            const client = window.SmartAgenda.DataManager.getById('clients', clientId);
+            if (client && window.SmartAgenda.ClientDetailView) {
+                window.SmartAgenda.ClientDetailView.show(client);
             }
-
-            // Open client details after a short delay
-            setTimeout(() => {
-                const client = window.SmartAgenda.DataManager.getById('clients', clientId);
-                if (client && window.SmartAgenda.Clients) {
-                    window.SmartAgenda.Clients.showClientModal(client);
-                }
-            }, 200);
         },
 
         showClientAppointments: function(clientId) {

@@ -1,0 +1,25 @@
+
+
+/* ============================================
+   Landscape Mode Optimizations
+   ============================================ */
+@media (orientation: landscape) {
+    /* Hamburger Menu - Reduce spacing for landscape */
+    .nav-header {
+        padding: 16px 8px;
+        padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+    }
+
+    .nav-spacer {
+        /* Reduce bottom spacer in landscape */
+        height: 80px;
+    }
+
+    .nav-items {
+        padding: 8px 0;
+    }
+
+    .nav-item {
+        padding: 10px 8px;
+    }
+}

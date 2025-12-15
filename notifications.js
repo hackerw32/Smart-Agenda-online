@@ -21,12 +21,132 @@
             // Request permissions on native platforms
             if (window.Capacitor && window.Capacitor.isNativePlatform()) {
                 await this.requestPermissions();
+
+                // Setup notification action listener for deep linking
+                this.setupNotificationActionListener();
             }
 
             // Reschedule all notifications on app start
             await this.rescheduleAllNotifications();
 
             console.log('Notifications service initialized');
+        },
+
+        /**
+         * Setup listener for notification tap actions (deep linking)
+         */
+        setupNotificationActionListener: function() {
+            if (!window.Capacitor || !window.Capacitor.Plugins.LocalNotifications) {
+                return;
+            }
+
+            const { LocalNotifications } = window.Capacitor.Plugins;
+
+            // Listen for notification tap
+            LocalNotifications.addListener('localNotificationActionPerformed', async (notification) => {
+                console.log('Notification tapped:', notification);
+
+                // Extract deep link data from notification
+                const extra = notification.notification?.extra;
+
+                if (!extra || !extra.itemId || !extra.itemType) {
+                    console.log('No deep link data in notification');
+                    return;
+                }
+
+                const { itemId, itemType } = extra;
+                console.log(`Opening ${itemType} with ID: ${itemId}`);
+
+                // Wait a bit for app to fully load
+                setTimeout(() => {
+                    this.openItemModal(itemId, itemType);
+                }, 500);
+            });
+
+            console.log('Notification action listener setup complete');
+        },
+
+        /**
+         * Open the appropriate modal based on item type
+         */
+        openItemModal: function(itemId, itemType) {
+            try {
+                if (itemType === 'appointment') {
+                    // Get appointment data
+                    const appointment = window.SmartAgenda.DataManager.getById('appointments', itemId);
+                    if (!appointment) {
+                        window.SmartAgenda.Toast.error('Το ραντεβού δεν βρέθηκε - μπορεί να έχει διαγραφεί');
+                        return;
+                    }
+
+                    // Switch to calendar tab
+                    if (window.SmartAgenda.TabManager) {
+                        window.SmartAgenda.TabManager.switchTab('calendar');
+                    }
+
+                    // Open appointment modal (even if completed/cancelled)
+                    setTimeout(() => {
+                        if (window.SmartAgenda.Calendar && window.SmartAgenda.Calendar.showAppointmentModal) {
+                            window.SmartAgenda.Calendar.showAppointmentModal(appointment);
+                        }
+                    }, 300);
+
+                } else if (itemType === 'task') {
+                    // Get task data
+                    const task = window.SmartAgenda.DataManager.getById('tasks', itemId);
+                    if (!task) {
+                        window.SmartAgenda.Toast.error('Το task δεν βρέθηκε - μπορεί να έχει διαγραφεί');
+                        return;
+                    }
+
+                    // Switch to tasks tab
+                    if (window.SmartAgenda.TabManager) {
+                        window.SmartAgenda.TabManager.switchTab('tasks');
+                    }
+
+                    // Open task modal (even if completed)
+                    setTimeout(() => {
+                        if (window.SmartAgenda.Tasks && window.SmartAgenda.Tasks.showTaskModal) {
+                            window.SmartAgenda.Tasks.showTaskModal(task);
+                        }
+                    }, 300);
+
+                } else if (itemType === 'interaction') {
+                    // Get interaction data
+                    const interaction = window.SmartAgenda.DataManager.getById('interactions', itemId);
+                    if (!interaction) {
+                        window.SmartAgenda.Toast.error('Το interaction δεν βρέθηκε - μπορεί να έχει διαγραφεί');
+                        return;
+                    }
+
+                    // Get client data
+                    const client = window.SmartAgenda.DataManager.getById('clients', interaction.clientId);
+                    if (!client) {
+                        window.SmartAgenda.Toast.error('Ο πελάτης δεν βρέθηκε - μπορεί να έχει διαγραφεί');
+                        return;
+                    }
+
+                    // Switch to interactions tab
+                    if (window.SmartAgenda.TabManager) {
+                        window.SmartAgenda.TabManager.switchTab('interactions');
+                    }
+
+                    // Open interaction modal (even if completed)
+                    setTimeout(() => {
+                        if (window.SmartAgenda.InteractionsPage && window.SmartAgenda.InteractionsPage.showInteractionModal) {
+                            window.SmartAgenda.InteractionsPage.showInteractionModal({
+                                ...interaction,
+                                client: client
+                            });
+                        }
+                    }, 300);
+                }
+
+                console.log(`Successfully opened ${itemType} modal for ID: ${itemId}`);
+            } catch (error) {
+                console.error('Error opening item modal:', error);
+                window.SmartAgenda.Toast.error('Σφάλμα κατά το άνοιγμα');
+            }
         },
 
         /**
@@ -127,7 +247,7 @@
         },
 
         /**
-         * Schedule notifications for an appointment or task
+         * Schedule notifications for an appointment, task, or follow-up
          * Supports multiple custom notifications per item
          */
         scheduleNotification: async function(item) {
@@ -156,6 +276,14 @@
                     return;
                 }
 
+                // Determine item type for deep linking
+                let itemType = 'appointment'; // default
+                if (item.type === 'followup' || item.type === 'checkin') {
+                    itemType = 'interaction';
+                } else if (item.title && !item.clientName) {
+                    itemType = 'task';
+                }
+
                 // Check if item has custom notifications array
                 if (item.notifications && Array.isArray(item.notifications) && item.notifications.length > 0) {
                     // Schedule each custom notification
@@ -171,21 +299,42 @@
                             continue;
                         }
 
-                        // Format the notification
-                        const title = item.clientName ? 'Appointment Reminder' : 'Task Reminder';
-                        const body = `${item.clientName || item.title || 'Reminder'} - ${this.formatTime(itemDate)}`;
+                        // Determine notification type and content with enhanced info
+                        let title, body;
+                        if (item.type === 'followup') {
+                            const clientName = this.getClientName(item.clientId) || 'Client';
+                            const client = window.SmartAgenda.DataManager.getById('clients', item.clientId);
+                            title = '📞 Follow-up Reminder';
+                            body = `${clientName}${client && client.phone ? ' (' + client.phone + ')' : ''}${item.notes ? '\n💬 ' + item.notes.substring(0, 60) : ''}\n🕐 ${this.formatDateTime(itemDate)}`;
+                        } else if (item.type === 'checkin') {
+                            const clientName = this.getClientName(item.clientId) || 'Client';
+                            const client = window.SmartAgenda.DataManager.getById('clients', item.clientId);
+                            title = '📍 Check-in Reminder';
+                            body = `${clientName}${client && client.phone ? ' (' + client.phone + ')' : ''}${item.notes ? '\n💬 ' + item.notes.substring(0, 60) : ''}\n🕐 ${this.formatDateTime(itemDate)}`;
+                        } else if (item.clientName) {
+                            title = '📅 Appointment Reminder';
+                            body = `${item.clientName}${item.description ? '\n💬 ' + item.description.substring(0, 60) : ''}\n🕐 ${this.formatDateTime(itemDate)}`;
+                        } else {
+                            title = '✅ Task Reminder';
+                            body = `${item.title || 'Reminder'}${item.description ? '\n💬 ' + item.description.substring(0, 60) : ''}\n🕐 ${this.formatDateTime(itemDate)}`;
+                        }
+
                         const timeText = this.formatNotificationTime(notif.minutes);
 
                         notificationsToSchedule.push({
                             id: notif.notificationId ? this.hashCode(notif.notificationId) : this.hashCode(item.id + '_' + i),
                             title: title,
-                            body: `${timeText}: ${body}`,
+                            body: `⏰ ${timeText}\n${body}`,
                             schedule: {
                                 at: notificationDate
                             },
                             sound: 'default',
                             smallIcon: 'ic_stat_icon_config_sample',
-                            iconColor: '#1a73e8'
+                            iconColor: '#1a73e8',
+                            extra: {
+                                itemId: item.id,
+                                itemType: itemType
+                            }
                         });
                     }
 
@@ -210,14 +359,30 @@
                         return;
                     }
 
-                    // Format the notification
-                    const title = item.clientName ? 'Appointment Reminder' : 'Task Reminder';
-                    const body = `${item.clientName || item.title || 'Reminder'} - ${this.formatTime(itemDate)}`;
+                    // Determine notification type and content with enhanced info
+                    let title, body;
+                    if (item.type === 'followup') {
+                        const clientName = this.getClientName(item.clientId) || 'Client';
+                        const client = window.SmartAgenda.DataManager.getById('clients', item.clientId);
+                        title = '📞 Follow-up Reminder';
+                        body = `${clientName}${client && client.phone ? ' (' + client.phone + ')' : ''}${item.notes ? '\n💬 ' + item.notes.substring(0, 60) : ''}\n🕐 ${this.formatDateTime(itemDate)}`;
+                    } else if (item.type === 'checkin') {
+                        const clientName = this.getClientName(item.clientId) || 'Client';
+                        const client = window.SmartAgenda.DataManager.getById('clients', item.clientId);
+                        title = '📍 Check-in Reminder';
+                        body = `${clientName}${client && client.phone ? ' (' + client.phone + ')' : ''}${item.notes ? '\n💬 ' + item.notes.substring(0, 60) : ''}\n🕐 ${this.formatDateTime(itemDate)}`;
+                    } else if (item.clientName) {
+                        title = '📅 Appointment Reminder';
+                        body = `${item.clientName}${item.description ? '\n💬 ' + item.description.substring(0, 60) : ''}\n🕐 ${this.formatDateTime(itemDate)}`;
+                    } else {
+                        title = '✅ Task Reminder';
+                        body = `${item.title || 'Reminder'}${item.description ? '\n💬 ' + item.description.substring(0, 60) : ''}\n🕐 ${this.formatDateTime(itemDate)}`;
+                    }
 
                     // Use item ID as notification ID
                     const notificationId = this.hashCode(item.id);
 
-                    // Schedule the notification
+                    // Schedule the notification with deep link data
                     await LocalNotifications.schedule({
                         notifications: [
                             {
@@ -229,7 +394,11 @@
                                 },
                                 sound: 'default',
                                 smallIcon: 'ic_stat_icon_config_sample',
-                                iconColor: '#1a73e8'
+                                iconColor: '#1a73e8',
+                                extra: {
+                                    itemId: item.id,
+                                    itemType: itemType
+                                }
                             }
                         ]
                     });
@@ -239,6 +408,15 @@
             } catch (error) {
                 console.error('Error scheduling notification:', error);
             }
+        },
+
+        /**
+         * Get client name by ID (for follow-ups)
+         */
+        getClientName: function(clientId) {
+            if (!clientId || !window.SmartAgenda?.DataManager) return null;
+            const client = window.SmartAgenda.DataManager.getById('clients', clientId);
+            return client ? client.name : null;
         },
 
         /**
@@ -323,7 +501,7 @@
         },
 
         /**
-         * Reschedule all notifications for all appointments and tasks
+         * Reschedule all notifications for all appointments, tasks, and follow-ups
          */
         rescheduleAllNotifications: async function() {
             // Cancel all existing notifications first
@@ -333,9 +511,10 @@
                 return;
             }
 
-            // Get all appointments and tasks
+            // Get all appointments, tasks, and interactions
             const appointments = window.SmartAgenda.DataManager.getAll('appointments');
             const tasks = window.SmartAgenda.DataManager.getAll('tasks');
+            const interactions = window.SmartAgenda.DataManager.getAll('interactions') || [];
 
             // Schedule notifications for each appointment
             for (const appointment of appointments) {
@@ -347,7 +526,12 @@
                 await this.scheduleNotification(task);
             }
 
-            console.log('All notifications rescheduled for appointments and tasks');
+            // Schedule notifications for all interactions (check-ins and follow-ups)
+            for (const interaction of interactions) {
+                await this.scheduleNotification(interaction);
+            }
+
+            console.log('All notifications rescheduled for appointments, tasks, and interactions');
         },
 
         /**
@@ -387,6 +571,19 @@
             const hours = date.getHours().toString().padStart(2, '0');
             const minutes = date.getMinutes().toString().padStart(2, '0');
             return `${hours}:${minutes}`;
+        },
+
+        /**
+         * Format date and time for notification body
+         */
+        formatDateTime: function(date) {
+            const dateObj = new Date(date);
+            const day = dateObj.getDate().toString().padStart(2, '0');
+            const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+            const year = dateObj.getFullYear();
+            const hours = dateObj.getHours().toString().padStart(2, '0');
+            const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+            return `${day}/${month}/${year} ${hours}:${minutes}`;
         },
 
         /**
@@ -475,29 +672,26 @@
                                  id="custom-notification-option"
                                  onmouseover="this.style.background='var(--surface-hover)'"
                                  onmouseout="this.style.background='transparent'">
-                                <input type="checkbox"
-                                       id="notif-option-custom"
-                                       style="cursor: pointer; width: 20px; height: 20px; visibility: hidden;">
-                                <label for="notif-option-custom" style="cursor: pointer; flex: 1; font-size: 15px; color: var(--primary-color); font-weight: 500;">
+                                <span style="width: 20px; height: 20px;"></span>
+                                <span style="cursor: pointer; flex: 1; font-size: 15px; color: var(--primary-color); font-weight: 500;">
                                     Διαμόρφωση...
-                                </label>
+                                </span>
                             </div>
                         </div>
 
-                        ${customNotificationsHtml ? `
-                            <div>
-                                <div style="font-weight: 500; margin-bottom: 8px; color: var(--text-primary);">Προσαρμοσμένες Ειδοποιήσεις:</div>
-                                <div id="custom-notifications-list">
-                                    ${customNotificationsHtml}
-                                </div>
+                        <div id="custom-notifications-container" ${customNotificationsHtml ? '' : 'style="display: none;"'}>
+                            <div style="font-weight: 500; margin-bottom: 8px; color: var(--text-primary);">Προσαρμοσμένες Ειδοποιήσεις:</div>
+                            <div id="custom-notifications-list">
+                                ${customNotificationsHtml}
                             </div>
-                        ` : ''}
+                        </div>
                     </div>
                 `;
 
                 const modal = window.SmartAgenda.UIComponents.showModal({
                     title: 'Επιλογή Ειδοποιήσεων',
                     content: content,
+                    hideCloseButton: true,
                     buttons: [
                         {
                             label: 'ΑΚΥΡΟ',
@@ -525,9 +719,15 @@
                                     });
                                 });
 
+                                console.log('Predefined notifications selected:', finalNotifications.length);
+
                                 // Add custom notifications
-                                modal.querySelectorAll('.custom-notification-item').forEach(item => {
+                                const customItems = modal.querySelectorAll('.custom-notification-item');
+                                console.log('Found custom notification items:', customItems.length);
+
+                                customItems.forEach(item => {
                                     const minutes = parseInt(item.dataset.minutes);
+                                    console.log('Custom item minutes:', minutes);
                                     if (!finalNotifications.some(n => n.minutes === minutes)) {
                                         finalNotifications.push({
                                             minutes: minutes,
@@ -539,8 +739,10 @@
                                 // Sort by time (soonest first)
                                 finalNotifications.sort((a, b) => a.minutes - b.minutes);
 
+                                console.log('Final notifications to save:', finalNotifications);
+
                                 window.SmartAgenda.UIComponents.closeModal(modal);
-                                window.SmartAgenda.Toast.success('Οι ειδοποιήσεις αποθηκεύτηκαν');
+                                // Don't show toast here - let the caller show it
                                 resolve(finalNotifications);
                             }
                         }
@@ -552,11 +754,22 @@
                     // Handle custom notification option
                     const customOption = modal.querySelector('#custom-notification-option');
                     if (customOption) {
-                        customOption.addEventListener('click', () => {
+                        let isCustomDialogOpen = false; // Prevent multiple dialogs
+
+                        customOption.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            if (isCustomDialogOpen) return; // Prevent multiple opens
+                            isCustomDialogOpen = true;
+
+                            // Hide parent modal temporarily
+                            modal.style.display = 'none';
+
                             this.showCustomNotificationDialog((minutes) => {
-                                // Add custom notification to the list
-                                const customList = modal.querySelector('#custom-notifications-list');
-                                const timeText = this.formatNotificationTime(minutes);
+                                isCustomDialogOpen = false;
+                                // Restore parent modal
+                                modal.style.display = '';
 
                                 // Check if already exists
                                 const exists = Array.from(modal.querySelectorAll('.custom-notification-item')).some(item =>
@@ -567,6 +780,11 @@
                                     window.SmartAgenda.Toast.warning('Αυτή η ειδοποίηση υπάρχει ήδη');
                                     return;
                                 }
+
+                                // Add custom notification to the list
+                                const customList = modal.querySelector('#custom-notifications-list');
+                                const customContainer = modal.querySelector('#custom-notifications-container');
+                                const timeText = this.formatNotificationTime(minutes);
 
                                 const customItemHtml = `
                                     <div style="padding: 12px; background: var(--primary-color)11; border: 1px solid var(--primary-color); border-radius: 6px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px;"
@@ -580,23 +798,30 @@
                                     </div>
                                 `;
 
+                                // Add to list
                                 if (customList) {
                                     customList.insertAdjacentHTML('beforeend', customItemHtml);
-                                } else {
-                                    // Create custom list container if it doesn't exist
-                                    const container = modal.querySelector('.modal-content > div > div');
-                                    const newSection = document.createElement('div');
-                                    newSection.innerHTML = `
-                                        <div style="font-weight: 500; margin-bottom: 8px; color: var(--text-primary);">Προσαρμοσμένες Ειδοποιήσεις:</div>
-                                        <div id="custom-notifications-list">
-                                            ${customItemHtml}
-                                        </div>
-                                    `;
-                                    container.appendChild(newSection);
-                                }
 
-                                // Rebind remove buttons
-                                this.bindRemoveCustomNotifButtons(modal);
+                                    // Show container if it was hidden
+                                    if (customContainer) {
+                                        customContainer.style.display = '';
+                                    }
+
+                                    // Rebind remove buttons
+                                    this.bindRemoveCustomNotifButtons(modal);
+
+                                    window.SmartAgenda.Toast.success('Η προσαρμοσμένη ειδοποίηση προστέθηκε');
+
+                                    console.log('Custom notification added:', minutes, 'minutes -', timeText);
+                                    console.log('Custom list now has', customList.children.length, 'items');
+                                } else {
+                                    console.error('Custom notifications list not found!');
+                                    window.SmartAgenda.Toast.error('Σφάλμα κατά την προσθήκη της ειδοποίησης');
+                                }
+                            }, () => {
+                                isCustomDialogOpen = false;
+                                // On cancel, just restore parent modal
+                                modal.style.display = '';
                             });
                         });
                     }
@@ -610,7 +835,7 @@
         /**
          * Show custom notification time input dialog
          */
-        showCustomNotificationDialog: function(onAdd) {
+        showCustomNotificationDialog: function(onAdd, onCancel) {
             const content = `
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     <div>
@@ -635,12 +860,16 @@
             const customModal = window.SmartAgenda.UIComponents.showModal({
                 title: 'Προσαρμοσμένη Ειδοποίηση',
                 content: content,
+                hideCloseButton: true,
                 buttons: [
                     {
                         label: 'Άκυρο',
                         type: 'secondary',
                         action: 'cancel',
-                        onClick: () => window.SmartAgenda.UIComponents.closeModal(customModal)
+                        onClick: () => {
+                            window.SmartAgenda.UIComponents.closeModal(customModal);
+                            if (onCancel) onCancel();
+                        }
                     },
                     {
                         label: 'Προσθήκη',
@@ -681,10 +910,11 @@
                     if (item) {
                         item.remove();
 
-                        // Check if list is empty and remove container
+                        // Check if list is empty and hide container
                         const customList = modal.querySelector('#custom-notifications-list');
-                        if (customList && customList.children.length === 0) {
-                            customList.closest('div').remove();
+                        const customContainer = modal.querySelector('#custom-notifications-container');
+                        if (customList && customList.children.length === 0 && customContainer) {
+                            customContainer.style.display = 'none';
                         }
                     }
                 });

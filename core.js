@@ -297,6 +297,8 @@
                 map: '🗺️ Map',
                 finance: '💰 Finance',
                 calendar: '📆 Calendar',
+                interactions: '🤝 Interactions',
+                advanced: '⚡ Advanced',
                 settings: '⚙️ Settings'
             };
             

@@ -133,7 +133,11 @@
                 const aPriority = priorityOrder[a.priority] ?? 999;
                 const bPriority = priorityOrder[b.priority] ?? 999;
                 if (aPriority !== bPriority) return aPriority - bPriority;
-                if (a.date && b.date) return new Date(a.date) - new Date(b.date);
+                if (a.date && b.date) {
+                    const aDate = this.parseLocalDate(a.date);
+                    const bDate = this.parseLocalDate(b.date);
+                    return aDate - bDate;
+                }
                 return a.date ? -1 : 1;
             });
 
@@ -275,17 +279,57 @@
                 ...clients.map(c => ({ value: c.id, label: c.name }))
             ];
 
-            // Extract date and time from ISO string
+            // Extract date, start time, and end time from ISO string
             let dateValue = '';
             let timeValue = '';
+            let endTimeValue = '';
+
+            // Check if there's a temp time range from calendar selection
+            const tempTimeRange = window.SmartAgenda?._tempTimeRange;
+
             if (appointment?.date) {
-                const d = new Date(appointment.date);
-                dateValue = d.toISOString().split('T')[0];
-                timeValue = d.toTimeString().substring(0, 5);
+                const d = this.parseLocalDate(appointment.date);
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                dateValue = `${year}-${month}-${day}`;
+
+                const hours = String(d.getHours()).padStart(2, '0');
+                const minutes = String(d.getMinutes()).padStart(2, '0');
+                timeValue = `${hours}:${minutes}`;
+
+                // If appointment has endDate, extract end time
+                if (appointment.endDate) {
+                    const endD = this.parseLocalDate(appointment.endDate);
+                    const endHours = String(endD.getHours()).padStart(2, '0');
+                    const endMinutes = String(endD.getMinutes()).padStart(2, '0');
+                    endTimeValue = `${endHours}:${endMinutes}`;
+                }
+            } else if (tempTimeRange) {
+                // Pre-fill from calendar time block selection (parse as local time)
+                const startD = this.parseLocalDate(tempTimeRange.start);
+                const endD = this.parseLocalDate(tempTimeRange.end);
+
+                const year = startD.getFullYear();
+                const month = String(startD.getMonth() + 1).padStart(2, '0');
+                const day = String(startD.getDate()).padStart(2, '0');
+                dateValue = `${year}-${month}-${day}`;
+
+                const hours = String(startD.getHours()).padStart(2, '0');
+                const minutes = String(startD.getMinutes()).padStart(2, '0');
+                timeValue = `${hours}:${minutes}`;
+
+                const endHours = String(endD.getHours()).padStart(2, '0');
+                const endMinutes = String(endD.getMinutes()).padStart(2, '0');
+                endTimeValue = `${endHours}:${endMinutes}`;
+
+                // Clear temp time range after using it
+                delete window.SmartAgenda._tempTimeRange;
             } else if (preSelectedDate) {
                 // Pre-fill date from calendar selection
                 const d = new Date(preSelectedDate);
                 dateValue = d.toISOString().split('T')[0];
+                timeValue = d.toTimeString().substring(0, 5);
             }
 
             // Define form fields
@@ -309,9 +353,15 @@
                     },
                     {
                         name: 'time',
-                        label: i18n.translate('appointment.time'),
+                        label: i18n.translate('appointment.time') + ' (start)',
                         type: 'time',
                         placeholder: '14:00'
+                    },
+                    {
+                        name: 'endTime',
+                        label: i18n.translate('appointment.time') + ' (end - optional)',
+                        type: 'time',
+                        placeholder: '15:00'
                     },
                     {
                         name: 'priority',
@@ -356,9 +406,15 @@
                     },
                     {
                         name: 'time',
-                        label: i18n.translate('appointment.time'),
+                        label: i18n.translate('appointment.time') + ' (start)',
                         type: 'time',
                         placeholder: '14:00'
+                    },
+                    {
+                        name: 'endTime',
+                        label: i18n.translate('appointment.time') + ' (end - optional)',
+                        type: 'time',
+                        placeholder: '15:00'
                     },
                     {
                         name: 'status',
@@ -422,9 +478,15 @@
                     },
                     {
                         name: 'time',
-                        label: i18n.translate('appointment.time'),
+                        label: i18n.translate('appointment.time') + ' (start)',
                         type: 'time',
                         placeholder: '14:00'
+                    },
+                    {
+                        name: 'endTime',
+                        label: i18n.translate('appointment.time') + ' (end - optional)',
+                        type: 'time',
+                        placeholder: '15:00'
                     },
                     {
                         name: 'priority',
@@ -459,6 +521,7 @@
                 client: appointment.client || '',
                 date: dateValue,
                 time: timeValue,
+                endTime: endTimeValue,
                 status: appointment.status || 'pending',
                 paid: appointment.paid || 'unpaid'
             } : {
@@ -468,7 +531,9 @@
                 paid: 'unpaid',
                 completed: false,
                 isStandalone: isStandalone,
-                date: new Date().toISOString().split('T')[0] // Today's date
+                date: dateValue || new Date().toISOString().split('T')[0], // Today's date or pre-selected
+                time: timeValue || '',
+                endTime: endTimeValue || ''
             };
 
             // Create form
@@ -504,7 +569,17 @@
                         }
 
                         window.SmartAgenda.Toast.success(isCompleted ? 'Marked as incomplete' : 'Marked as complete and paid');
-                        window.SmartAgenda.UIComponents.closeModal(modal);
+
+                        // If opened from day view, refresh it instead of just closing
+                        if (window.SmartAgenda._fromDayView) {
+                            delete window.SmartAgenda._fromDayView;
+                            window.SmartAgenda.UIComponents.closeModal(modal);
+                            if (window.SmartAgenda.CalendarViews && window.SmartAgenda.CalendarViews.refreshDayView) {
+                                window.SmartAgenda.CalendarViews.refreshDayView();
+                            }
+                        } else {
+                            window.SmartAgenda.UIComponents.closeModal(modal);
+                        }
                     }
                 });
 
@@ -650,17 +725,40 @@
                 }
             }
 
-            // Combine date and time into ISO string
+            // Combine date and time into ISO string (local time, no timezone conversion)
             let dateTimeString = values.date;
             if (values.time) {
-                dateTimeString += 'T' + values.time + ':00';
+                dateTimeString += 'T' + values.time + ':00.000';
             } else {
-                dateTimeString += 'T12:00:00'; // Default to noon if no time
+                dateTimeString += 'T12:00:00.000'; // Default to noon if no time
             }
-            values.date = new Date(dateTimeString).toISOString();
+            values.date = dateTimeString;
 
-            // Remove time field (it's now in date)
+            // Handle end time if provided
+            if (values.endTime) {
+                let endDateTimeString = values.date.split('T')[0]; // Same date as start
+                endDateTimeString += 'T' + values.endTime + ':00.000';
+                values.endDate = endDateTimeString;
+            } else {
+                // No end time - remove endDate if it exists
+                delete values.endDate;
+            }
+
+            // Remove time fields (they're now in date and endDate)
             delete values.time;
+            delete values.endTime;
+
+            // Check for overlapping appointments
+            const hasOverlap = this.checkAppointmentOverlap(
+                values.date,
+                values.endDate || values.date, // If no endDate, use same as start
+                existingAppointment ? existingAppointment.id : null
+            );
+
+            if (hasOverlap) {
+                window.SmartAgenda.Toast.error('Υπάρχει ήδη ραντεβού σε αυτή την ώρα!');
+                return;
+            }
 
             // Handle standalone vs client-based appointments
             if (isStandalone && !values.client) {
@@ -700,7 +798,17 @@
                     }
 
                     window.SmartAgenda.Toast.success(window.SmartAgenda.I18n.translate('msg.saved'));
-                    window.SmartAgenda.UIComponents.closeModal(modal);
+
+                    // If opened from day view, refresh it instead of just closing
+                    if (window.SmartAgenda._fromDayView) {
+                        delete window.SmartAgenda._fromDayView;
+                        window.SmartAgenda.UIComponents.closeModal(modal);
+                        if (window.SmartAgenda.CalendarViews && window.SmartAgenda.CalendarViews.refreshDayView) {
+                            window.SmartAgenda.CalendarViews.refreshDayView();
+                        }
+                    } else {
+                        window.SmartAgenda.UIComponents.closeModal(modal);
+                    }
                 }
             } else {
                 const added = window.SmartAgenda.DataManager.add('appointments', values);
@@ -711,9 +819,70 @@
                     }
 
                     window.SmartAgenda.Toast.success(window.SmartAgenda.I18n.translate('msg.saved'));
-                    window.SmartAgenda.UIComponents.closeModal(modal);
+
+                    // If opened from day view, refresh it instead of just closing
+                    if (window.SmartAgenda._fromDayView) {
+                        delete window.SmartAgenda._fromDayView;
+                        window.SmartAgenda.UIComponents.closeModal(modal);
+                        if (window.SmartAgenda.CalendarViews && window.SmartAgenda.CalendarViews.refreshDayView) {
+                            window.SmartAgenda.CalendarViews.refreshDayView();
+                        }
+                    } else {
+                        window.SmartAgenda.UIComponents.closeModal(modal);
+                    }
                 }
             }
+        },
+
+        /**
+         * Parse date string as local time (no timezone conversion)
+         * Format: "2024-12-13T01:00:00.000" or "2024-12-13T01:00:00"
+         */
+        parseLocalDate: function(dateStr) {
+            if (!dateStr) return null;
+
+            const [datepart, timepart] = dateStr.split('T');
+            const [year, month, day] = datepart.split('-').map(Number);
+
+            if (timepart) {
+                const timeParts = timepart.split(':');
+                const hours = parseInt(timeParts[0], 10);
+                const minutes = parseInt(timeParts[1], 10);
+                const seconds = timeParts[2] ? parseInt(timeParts[2].split('.')[0], 10) : 0;
+                return new Date(year, month - 1, day, hours, minutes, seconds);
+            }
+
+            return new Date(year, month - 1, day);
+        },
+
+        /**
+         * Check if an appointment overlaps with existing appointments
+         */
+        checkAppointmentOverlap: function(startDate, endDate, excludeId = null) {
+            const appointments = window.SmartAgenda.DataManager.getAll('appointments');
+
+            // Parse the dates as local time
+            const newStart = this.parseLocalDate(startDate);
+            const newEnd = this.parseLocalDate(endDate);
+
+            // Check each existing appointment
+            for (const apt of appointments) {
+                // Skip the appointment we're editing
+                if (excludeId && apt.id === excludeId) continue;
+
+                // Skip cancelled or completed appointments
+                if (apt.status === 'cancelled' || apt.status === 'completed') continue;
+
+                const aptStart = this.parseLocalDate(apt.date);
+                let aptEnd = apt.endDate ? this.parseLocalDate(apt.endDate) : new Date(aptStart.getTime() + 30 * 60000); // Default 30 min
+
+                // Check for overlap: start1 < end2 AND end1 > start2
+                if (newStart < aptEnd && newEnd > aptStart) {
+                    return true; // Overlap found
+                }
+            }
+
+            return false; // No overlap
         },
 
         /**
@@ -764,77 +933,80 @@
             // Store current notifications in modal
             modal.setAttribute('data-notifications', JSON.stringify(currentNotifications));
 
+            // Create handler function for managing notifications
+            const handleManageNotifications = async () => {
+                // Get current notifications from modal
+                const currentData = modal.getAttribute('data-notifications');
+                const currentNotifs = currentData ? JSON.parse(currentData) : [];
+
+                // Show notification selector
+                const selectedNotifications = await window.SmartAgenda.Notifications.showNotificationSelector(currentNotifs);
+
+                if (selectedNotifications !== null) {
+                    // Update modal data
+                    modal.setAttribute('data-notifications', JSON.stringify(selectedNotifications));
+
+                    // Update summary
+                    const notifCount = selectedNotifications.length;
+                    const countBadge = notifCount > 0 ? ` <span style="background: var(--primary-color); color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">${notifCount}</span>` : '';
+
+                    const headerSection = notificationSection.querySelector('div:first-child');
+                    if (headerSection) {
+                        headerSection.innerHTML = `
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-weight: 500; color: var(--text-primary);">Ειδοποιήσεις</span>
+                                ${countBadge}
+                            </div>
+                            <button type="button" id="manage-notifications-btn"
+                                    style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                                <span>${appointment ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                            </button>
+                        `;
+
+                        // Re-bind button with the same handler
+                        const newBtn = headerSection.querySelector('#manage-notifications-btn');
+                        if (newBtn) {
+                            newBtn.addEventListener('click', handleManageNotifications);
+                        }
+                    }
+
+                    // Update or create summary
+                    let summaryDiv = notificationSection.querySelector('#notifications-summary');
+                    if (notifCount > 0) {
+                        const summaryHtml = `
+                            <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Ενεργές ειδοποιήσεις:</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                ${selectedNotifications.map(n => {
+                                    const timeText = window.SmartAgenda.Notifications.formatNotificationTime(n.minutes);
+                                    return `<span style="padding: 4px 10px; background: var(--primary-color)22; color: var(--primary-color); border-radius: 16px; font-size: 12px; font-weight: 500;">${timeText}</span>`;
+                                }).join('')}
+                            </div>
+                        `;
+
+                        if (summaryDiv) {
+                            summaryDiv.innerHTML = summaryHtml;
+                        } else {
+                            summaryDiv = document.createElement('div');
+                            summaryDiv.id = 'notifications-summary';
+                            summaryDiv.style.cssText = 'margin-top: 12px; padding: 12px; background: var(--background); border-radius: 6px; border: 1px solid var(--border);';
+                            summaryDiv.innerHTML = summaryHtml;
+                            notificationSection.appendChild(summaryDiv);
+                        }
+                    } else {
+                        if (summaryDiv) {
+                            summaryDiv.remove();
+                        }
+                    }
+
+                    window.SmartAgenda.Toast.success('Οι ειδοποιήσεις ενημερώθηκαν');
+                }
+            };
+
             // Bind button event
             setTimeout(() => {
                 const manageBtn = modal.querySelector('#manage-notifications-btn');
                 if (manageBtn) {
-                    manageBtn.addEventListener('click', async () => {
-                        // Get current notifications from modal
-                        const currentData = modal.getAttribute('data-notifications');
-                        const currentNotifs = currentData ? JSON.parse(currentData) : [];
-
-                        // Show notification selector
-                        const selectedNotifications = await window.SmartAgenda.Notifications.showNotificationSelector(currentNotifs);
-
-                        if (selectedNotifications !== null) {
-                            // Update modal data
-                            modal.setAttribute('data-notifications', JSON.stringify(selectedNotifications));
-
-                            // Update summary
-                            const notifCount = selectedNotifications.length;
-                            const countBadge = notifCount > 0 ? ` <span style="background: var(--primary-color); color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">${notifCount}</span>` : '';
-
-                            const headerSection = notificationSection.querySelector('div:first-child');
-                            if (headerSection) {
-                                headerSection.innerHTML = `
-                                    <div style="display: flex; align-items: center; gap: 8px;">
-                                        <span style="font-weight: 500; color: var(--text-primary);">Ειδοποιήσεις</span>
-                                        ${countBadge}
-                                    </div>
-                                    <button type="button" id="manage-notifications-btn"
-                                            style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
-                                        <span>${appointment ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
-                                    </button>
-                                `;
-
-                                // Re-bind button
-                                const newBtn = headerSection.querySelector('#manage-notifications-btn');
-                                if (newBtn) {
-                                    newBtn.addEventListener('click', arguments.callee);
-                                }
-                            }
-
-                            // Update or create summary
-                            let summaryDiv = notificationSection.querySelector('#notifications-summary');
-                            if (notifCount > 0) {
-                                const summaryHtml = `
-                                    <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Ενεργές ειδοποιήσεις:</div>
-                                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                        ${selectedNotifications.map(n => {
-                                            const timeText = window.SmartAgenda.Notifications.formatNotificationTime(n.minutes);
-                                            return `<span style="padding: 4px 10px; background: var(--primary-color)22; color: var(--primary-color); border-radius: 16px; font-size: 12px; font-weight: 500;">${timeText}</span>`;
-                                        }).join('')}
-                                    </div>
-                                `;
-
-                                if (summaryDiv) {
-                                    summaryDiv.innerHTML = summaryHtml;
-                                } else {
-                                    summaryDiv = document.createElement('div');
-                                    summaryDiv.id = 'notifications-summary';
-                                    summaryDiv.style.cssText = 'margin-top: 12px; padding: 12px; background: var(--background); border-radius: 6px; border: 1px solid var(--border);';
-                                    summaryDiv.innerHTML = summaryHtml;
-                                    notificationSection.appendChild(summaryDiv);
-                                }
-                            } else {
-                                if (summaryDiv) {
-                                    summaryDiv.remove();
-                                }
-                            }
-
-                            window.SmartAgenda.Toast.success('Οι ειδοποιήσεις ενημερώθηκαν');
-                        }
-                    });
+                    manageBtn.addEventListener('click', handleManageNotifications);
                 }
             }, 100);
         },
@@ -928,7 +1100,7 @@
                 cancelText: window.SmartAgenda.I18n.translate('actions.cancel'),
                 type: 'danger'
             });
-            
+
             if (confirmed) {
                 const deleted = window.SmartAgenda.DataManager.delete('appointments', appointmentId);
                 if (deleted) {
@@ -938,7 +1110,17 @@
                     }
 
                     window.SmartAgenda.Toast.success(window.SmartAgenda.I18n.translate('msg.deleted'));
-                    window.SmartAgenda.UIComponents.closeModal(modal);
+
+                    // If opened from day view, refresh it instead of just closing
+                    if (window.SmartAgenda._fromDayView) {
+                        delete window.SmartAgenda._fromDayView;
+                        window.SmartAgenda.UIComponents.closeModal(modal);
+                        if (window.SmartAgenda.CalendarViews && window.SmartAgenda.CalendarViews.refreshDayView) {
+                            window.SmartAgenda.CalendarViews.refreshDayView();
+                        }
+                    } else {
+                        window.SmartAgenda.UIComponents.closeModal(modal);
+                    }
                 }
             }
         },
@@ -1044,37 +1226,89 @@
         enhanceSelectWithSearch: function(selectElement) {
             const wrapper = document.createElement('div');
             wrapper.className = 'searchable-select-wrapper';
-            
+
             const searchInput = document.createElement('input');
             searchInput.type = 'text';
             searchInput.className = 'form-control searchable-select-search';
             searchInput.placeholder = 'Search clients...';
-            
+
             selectElement.parentNode.insertBefore(wrapper, selectElement);
             wrapper.appendChild(searchInput);
             wrapper.appendChild(selectElement);
-            
+
+            // Load More button
+            const loadMoreBtn = document.createElement('button');
+            loadMoreBtn.type = 'button';
+            loadMoreBtn.className = 'btn-secondary';
+            loadMoreBtn.textContent = 'Φόρτωση περισσότερων...';
+            loadMoreBtn.style.cssText = 'width: 100%; margin-top: 8px; display: none;';
+            wrapper.appendChild(loadMoreBtn);
+
             const allOptions = Array.from(selectElement.options);
-            
-            searchInput.addEventListener('input', (e) => {
-                const searchTerm = e.target.value.toLowerCase();
+            let itemsToShow = 25;
+            let currentSearchTerm = '';
+
+            const renderOptions = () => {
+                const searchTerm = currentSearchTerm.toLowerCase();
                 selectElement.innerHTML = '';
-                
-                allOptions.forEach(option => {
-                    if (option.text.toLowerCase().includes(searchTerm) || option.value === '') {
+
+                let filtered = allOptions;
+                if (searchTerm) {
+                    // When searching, show all results
+                    filtered = allOptions.filter(option =>
+                        option.text.toLowerCase().includes(searchTerm) || option.value === ''
+                    );
+                    loadMoreBtn.style.display = 'none';
+                } else {
+                    // When not searching, apply pagination
+                    const optionsToShow = allOptions.slice(0, itemsToShow + 1); // +1 for empty option
+                    optionsToShow.forEach(option => {
                         selectElement.appendChild(option.cloneNode(true));
+                    });
+
+                    // Show/hide Load More button
+                    if (allOptions.length > itemsToShow + 1) {
+                        loadMoreBtn.style.display = 'block';
+                        loadMoreBtn.textContent = `Φόρτωση περισσότερων (${allOptions.length - itemsToShow - 1} remaining)`;
+                    } else {
+                        loadMoreBtn.style.display = 'none';
                     }
+
+                    const currentValue = selectElement.dataset.currentValue;
+                    if (currentValue) {
+                        selectElement.value = currentValue;
+                    }
+                    return;
+                }
+
+                // Render filtered results (when searching)
+                filtered.forEach(option => {
+                    selectElement.appendChild(option.cloneNode(true));
                 });
-                
+
                 const currentValue = selectElement.dataset.currentValue;
                 if (currentValue) {
                     selectElement.value = currentValue;
                 }
+            };
+
+            searchInput.addEventListener('input', (e) => {
+                currentSearchTerm = e.target.value;
+                itemsToShow = 25; // Reset pagination on new search
+                renderOptions();
             });
-            
+
+            loadMoreBtn.addEventListener('click', () => {
+                itemsToShow += 25;
+                renderOptions();
+            });
+
             selectElement.addEventListener('change', (e) => {
                 selectElement.dataset.currentValue = e.target.value;
             });
+
+            // Initial render
+            renderOptions();
         },
 
         getClientName: function(clientId) {
@@ -1085,12 +1319,12 @@
 
         isOverdue: function(appointment) {
             if (!appointment.date || appointment.completed) return false;
-            return new Date(appointment.date) < new Date();
+            return this.parseLocalDate(appointment.date) < new Date();
         },
 
         formatDateTime: function(dateString) {
             if (!dateString) return '';
-            const date = new Date(dateString);
+            const date = this.parseLocalDate(dateString);
             const now = new Date();
             const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             const tomorrow = new Date(today);

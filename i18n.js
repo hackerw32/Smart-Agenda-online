@@ -17,6 +17,7 @@
             'nav.map': 'Map',
             'nav.finance': 'Finance',
             'nav.calendar': 'Calendar',
+            'nav.interactions': 'Interactions',
             'nav.advanced': 'Advanced',
             'nav.settings': 'Settings',
             
@@ -49,6 +50,7 @@
             'search.clients': 'Search clients...',
             'search.appointments': 'Search appointments...',
             'search.tasks': 'Search tasks...',
+            'search.interactions': 'Search interactions and clients...',
             
             // Settings
             'settings.appearance': 'Appearance',
@@ -228,6 +230,7 @@
             'nav.map': 'Χάρτης',
             'nav.finance': 'Οικονομικά',
             'nav.calendar': 'Ημερολόγιο',
+            'nav.interactions': 'Αλληλεπιδράσεις',
             'nav.advanced': 'Προχωρημένα',
             'nav.settings': 'Ρυθμίσεις',
             
@@ -260,6 +263,7 @@
             'search.clients': 'Αναζήτηση πελατών...',
             'search.appointments': 'Αναζήτηση ραντεβού...',
             'search.tasks': 'Αναζήτηση εργασιών...',
+            'search.interactions': 'Αναζήτηση αλληλεπιδράσεων και πελατών...',
             
             // Ρυθμίσεις
             'settings.appearance': 'Εμφάνιση',
@@ -438,6 +442,7 @@
             'nav.map': 'Карта',
             'nav.finance': 'Финансы',
             'nav.calendar': 'Календарь',
+            'nav.interactions': 'Взаимодействия',
             'nav.advanced': 'Расширенные',
             'nav.settings': 'Настройки',
             
@@ -470,6 +475,7 @@
             'search.clients': 'Поиск клиентов...',
             'search.appointments': 'Поиск встреч...',
             'search.tasks': 'Поиск задач...',
+            'search.interactions': 'Поиск взаимодействий и клиентов...',
             
             // Настройки
             'settings.appearance': 'Внешний вид',

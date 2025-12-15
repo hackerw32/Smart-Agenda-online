@@ -369,7 +369,16 @@
                     type: task.completed ? 'secondary' : 'success',
                     action: 'complete',
                     onClick: (modal) => {
-                        window.SmartAgenda.DataManager.update('tasks', task.id, { completed: !task.completed });
+                        const updateData = { completed: !task.completed };
+
+                        // If marking as complete and task has no date but has amount, set date to today
+                        // This ensures it appears in the finance calendar
+                        if (!task.completed && !task.date && task.amount) {
+                            updateData.date = new Date().toISOString();
+                            console.log('Task completed without date, setting date to today:', updateData.date);
+                        }
+
+                        window.SmartAgenda.DataManager.update('tasks', task.id, updateData);
                         window.SmartAgenda.Toast.success(task.completed ? 'Marked as incomplete' : 'Marked as complete');
                         window.SmartAgenda.UIComponents.closeModal(modal);
                     }
@@ -800,7 +809,22 @@
         },
 
         toggleComplete: function(taskId, completed) {
-            window.SmartAgenda.DataManager.update('tasks', taskId, { completed });
+            // Get the task first to check if it has a date
+            const task = window.SmartAgenda.DataManager.getById('tasks', taskId);
+            const updateData = { completed };
+
+            // If completing a task without a due date, set the date to today
+            // This ensures it appears in the finance calendar
+            if (completed && task && !task.date && task.amount) {
+                updateData.date = new Date().toISOString();
+                console.log('Task completed without date, setting date to today:', updateData.date);
+            }
+
+            window.SmartAgenda.DataManager.update('tasks', taskId, updateData);
+
+            // Get the updated task to check
+            const updatedTask = window.SmartAgenda.DataManager.getById('tasks', taskId);
+            console.log('Updated task:', updatedTask);
 
             // Handle notifications based on completion status
             if (window.SmartAgenda.Notifications) {
@@ -809,11 +833,16 @@
                     window.SmartAgenda.Notifications.cancelNotification(taskId);
                 } else {
                     // Task marked as incomplete - reschedule notifications
-                    const task = window.SmartAgenda.DataManager.getById('tasks', taskId);
-                    if (task) {
-                        window.SmartAgenda.Notifications.scheduleNotification(task);
+                    if (updatedTask) {
+                        window.SmartAgenda.Notifications.scheduleNotification(updatedTask);
                     }
                 }
+            }
+
+            // Refresh calendar if it's visible
+            if (window.SmartAgenda.CalendarViews && completed && updatedTask && updatedTask.amount) {
+                console.log('Refreshing calendar after task completion');
+                window.SmartAgenda.CalendarViews.renderCurrentView();
             }
         },
 
@@ -865,77 +894,80 @@
             // Store current notifications in modal
             modal.setAttribute('data-notifications', JSON.stringify(currentNotifications));
 
+            // Create handler function for managing notifications
+            const handleManageNotifications = async () => {
+                // Get current notifications from modal
+                const currentData = modal.getAttribute('data-notifications');
+                const currentNotifs = currentData ? JSON.parse(currentData) : [];
+
+                // Show notification selector
+                const selectedNotifications = await window.SmartAgenda.Notifications.showNotificationSelector(currentNotifs);
+
+                if (selectedNotifications !== null) {
+                    // Update modal data
+                    modal.setAttribute('data-notifications', JSON.stringify(selectedNotifications));
+
+                    // Update summary
+                    const notifCount = selectedNotifications.length;
+                    const countBadge = notifCount > 0 ? ` <span style="background: var(--primary-color); color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">${notifCount}</span>` : '';
+
+                    const headerSection = notificationSection.querySelector('div:first-child');
+                    if (headerSection) {
+                        headerSection.innerHTML = `
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-weight: 500; color: var(--text-primary);">Ειδοποιήσεις</span>
+                                ${countBadge}
+                            </div>
+                            <button type="button" id="manage-notifications-btn"
+                                    style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                                <span>${task ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                            </button>
+                        `;
+
+                        // Re-bind button with the same handler
+                        const newBtn = headerSection.querySelector('#manage-notifications-btn');
+                        if (newBtn) {
+                            newBtn.addEventListener('click', handleManageNotifications);
+                        }
+                    }
+
+                    // Update or create summary
+                    let summaryDiv = notificationSection.querySelector('#notifications-summary');
+                    if (notifCount > 0) {
+                        const summaryHtml = `
+                            <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Ενεργές ειδοποιήσεις:</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                ${selectedNotifications.map(n => {
+                                    const timeText = window.SmartAgenda.Notifications.formatNotificationTime(n.minutes);
+                                    return `<span style="padding: 4px 10px; background: var(--primary-color)22; color: var(--primary-color); border-radius: 16px; font-size: 12px; font-weight: 500;">${timeText}</span>`;
+                                }).join('')}
+                            </div>
+                        `;
+
+                        if (summaryDiv) {
+                            summaryDiv.innerHTML = summaryHtml;
+                        } else {
+                            summaryDiv = document.createElement('div');
+                            summaryDiv.id = 'notifications-summary';
+                            summaryDiv.style.cssText = 'margin-top: 12px; padding: 12px; background: var(--background); border-radius: 6px; border: 1px solid var(--border);';
+                            summaryDiv.innerHTML = summaryHtml;
+                            notificationSection.appendChild(summaryDiv);
+                        }
+                    } else {
+                        if (summaryDiv) {
+                            summaryDiv.remove();
+                        }
+                    }
+
+                    window.SmartAgenda.Toast.success('Οι ειδοποιήσεις ενημερώθηκαν');
+                }
+            };
+
             // Bind button event
             setTimeout(() => {
                 const manageBtn = modal.querySelector('#manage-notifications-btn');
                 if (manageBtn) {
-                    manageBtn.addEventListener('click', async () => {
-                        // Get current notifications from modal
-                        const currentData = modal.getAttribute('data-notifications');
-                        const currentNotifs = currentData ? JSON.parse(currentData) : [];
-
-                        // Show notification selector
-                        const selectedNotifications = await window.SmartAgenda.Notifications.showNotificationSelector(currentNotifs);
-
-                        if (selectedNotifications !== null) {
-                            // Update modal data
-                            modal.setAttribute('data-notifications', JSON.stringify(selectedNotifications));
-
-                            // Update summary
-                            const notifCount = selectedNotifications.length;
-                            const countBadge = notifCount > 0 ? ` <span style="background: var(--primary-color); color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">${notifCount}</span>` : '';
-
-                            const headerSection = notificationSection.querySelector('div:first-child');
-                            if (headerSection) {
-                                headerSection.innerHTML = `
-                                    <div style="display: flex; align-items: center; gap: 8px;">
-                                        <span style="font-weight: 500; color: var(--text-primary);">Ειδοποιήσεις</span>
-                                        ${countBadge}
-                                    </div>
-                                    <button type="button" id="manage-notifications-btn"
-                                            style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
-                                        <span>${task ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
-                                    </button>
-                                `;
-
-                                // Re-bind button
-                                const newBtn = headerSection.querySelector('#manage-notifications-btn');
-                                if (newBtn) {
-                                    newBtn.addEventListener('click', arguments.callee);
-                                }
-                            }
-
-                            // Update or create summary
-                            let summaryDiv = notificationSection.querySelector('#notifications-summary');
-                            if (notifCount > 0) {
-                                const summaryHtml = `
-                                    <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">Ενεργές ειδοποιήσεις:</div>
-                                    <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                                        ${selectedNotifications.map(n => {
-                                            const timeText = window.SmartAgenda.Notifications.formatNotificationTime(n.minutes);
-                                            return `<span style="padding: 4px 10px; background: var(--primary-color)22; color: var(--primary-color); border-radius: 16px; font-size: 12px; font-weight: 500;">${timeText}</span>`;
-                                        }).join('')}
-                                    </div>
-                                `;
-
-                                if (summaryDiv) {
-                                    summaryDiv.innerHTML = summaryHtml;
-                                } else {
-                                    summaryDiv = document.createElement('div');
-                                    summaryDiv.id = 'notifications-summary';
-                                    summaryDiv.style.cssText = 'margin-top: 12px; padding: 12px; background: var(--background); border-radius: 6px; border: 1px solid var(--border);';
-                                    summaryDiv.innerHTML = summaryHtml;
-                                    notificationSection.appendChild(summaryDiv);
-                                }
-                            } else {
-                                if (summaryDiv) {
-                                    summaryDiv.remove();
-                                }
-                            }
-
-                            window.SmartAgenda.Toast.success('Οι ειδοποιήσεις ενημερώθηκαν');
-                        }
-                    });
+                    manageBtn.addEventListener('click', handleManageNotifications);
                 }
             }, 100);
         },

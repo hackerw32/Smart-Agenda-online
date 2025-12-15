@@ -44,7 +44,8 @@
                 content,
                 buttons = [],
                 size = 'medium', // small, medium, large
-                closeOnOverlay = true
+                closeOnOverlay = true,
+                hideCloseButton = false
             } = options;
 
             // Create modal structure
@@ -54,7 +55,7 @@
                 <div class="modal-dialog modal-${size}">
                     <div class="modal-header">
                         <h3 class="modal-title">${title}</h3>
-                        <button class="modal-close" aria-label="Close">×</button>
+                        ${hideCloseButton ? '' : '<button class="modal-close" aria-label="Close">×</button>'}
                     </div>
                     <div class="modal-body">
                         ${content}
@@ -77,7 +78,9 @@
 
             // Bind events
             const closeBtn = modal.querySelector('.modal-close');
-            closeBtn.addEventListener('click', () => this.closeModal(modal));
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => this.closeModal(modal));
+            }
 
             if (closeOnOverlay) {
                 modal.addEventListener('click', (e) => {

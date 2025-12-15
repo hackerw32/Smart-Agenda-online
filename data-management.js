@@ -18,6 +18,7 @@
             APPOINTMENTS: 'smart_agenda_appointments',
             TASKS: 'smart_agenda_tasks',
             CATEGORIES: 'smart_agenda_categories',
+            INTERACTIONS: 'smart_agenda_interactions',
             SETTINGS: 'smart_agenda_settings'
         },
 
@@ -349,9 +350,10 @@
                 appointments: this.getAll('appointments'),
                 tasks: this.getAll('tasks'),
                 categories: this.getAll('categories'),
+                interactions: this.getAll('interactions'),
                 settings: settings,
                 exportDate: new Date().toISOString(),
-                version: '2.0.0'
+                version: '2.1.0'
             };
         },
 
@@ -385,6 +387,11 @@
                         const mergedCategories = this.mergeArrayData(existingCategories, data.categories);
                         this.saveAll('categories', mergedCategories);
                     }
+                    if (data.interactions) {
+                        const existingInteractions = this.getAll('interactions');
+                        const mergedInteractions = this.mergeArrayData(existingInteractions, data.interactions);
+                        this.saveAll('interactions', mergedInteractions);
+                    }
                 } else {
                     // Replace mode: clear existing data and import backup
                     if (data.clients) {
@@ -398,6 +405,9 @@
                     }
                     if (data.categories) {
                         this.saveAll('categories', data.categories);
+                    }
+                    if (data.interactions) {
+                        this.saveAll('interactions', data.interactions);
                     }
                 }
 

@@ -364,6 +364,13 @@
         // ============================================
 
         showClientModal: function(client = null) {
+            // Use new modal if available
+            if (window.SmartAgenda?.ClientModalNew) {
+                window.SmartAgenda.ClientModalNew.showClientModal(client);
+                return;
+            }
+
+            // Fallback to old modal
             const isEdit = !!client;
             const i18n = window.SmartAgenda.I18n;
 
@@ -1185,8 +1192,10 @@
             latInput.value = this.selectedPickerLocation.lat;
             lngInput.value = this.selectedPickerLocation.lng;
 
-            // Update location display
-            locationDisplay.innerHTML = `<span style="color: var(--success);">📌 ${this.selectedPickerLocation.address || 'Location selected'}</span>`;
+            // Update location display (with null check)
+            if (locationDisplay) {
+                locationDisplay.innerHTML = `<span style="color: var(--success);">📌 ${this.selectedPickerLocation.address || 'Location selected'}</span>`;
+            }
 
             // Cleanup and close
             this.cleanupLocationPicker();
@@ -1226,7 +1235,7 @@
             const clientTypes = Array.from(selectedTypeOptions).map(opt => opt.dataset.typeId);
 
             // Get primary type (the one with star)
-            const primaryStar = Array.from(modal.querySelectorAll('.type-star')).find(s => s.textContent === '⭐');
+            const primaryStar = Array.from(modal.querySelectorAll('.type-star')).find(s => s.textContent.trim() === '⭐');
             const primaryType = primaryStar ? primaryStar.closest('.type-option').dataset.typeId : (clientTypes.length > 0 ? clientTypes[0] : null);
 
             // Validate at least one type is selected
