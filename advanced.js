@@ -38,6 +38,31 @@
             document.getElementById('bulk-update-status-btn')?.addEventListener('click', () => this.bulkUpdateAppointmentStatus());
             document.getElementById('bulk-delete-appointments-btn')?.addEventListener('click', () => this.bulkDeleteAppointments());
 
+            // Ads toggle for debugging
+            const adsToggle = document.getElementById('ads-toggle');
+            if (adsToggle) {
+                // Load saved state
+                const adsEnabled = localStorage.getItem('ads-enabled') !== 'false'; // Default to true
+                adsToggle.checked = adsEnabled;
+
+                // Handle toggle change
+                adsToggle.addEventListener('change', (e) => {
+                    const enabled = e.target.checked;
+                    localStorage.setItem('ads-enabled', enabled ? 'true' : 'false');
+
+                    // Update AdMob service
+                    if (window.SmartAgenda?.AdMobService) {
+                        if (enabled) {
+                            window.SmartAgenda.AdMobService.init();
+                            window.SmartAgenda.Toast.success('Ads enabled. Please restart the app for full effect.');
+                        } else {
+                            window.SmartAgenda.AdMobService.hideBanner();
+                            window.SmartAgenda.Toast.info('Ads disabled. Please restart the app for full effect.');
+                        }
+                    }
+                });
+            }
+
             // Listen to data changes
             if (window.SmartAgenda) {
                 window.SmartAgenda.EventBus.on('data:change', () => this.render());

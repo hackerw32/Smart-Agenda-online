@@ -803,7 +803,7 @@
          */
         getStats: function(type) {
             const items = this.getAll(type);
-            
+
             const stats = {
                 total: items.length
             };
@@ -816,7 +816,7 @@
             if (type === 'appointments' || type === 'tasks') {
                 stats.completed = items.filter(i => i.completed).length;
                 stats.pending = items.filter(i => !i.completed).length;
-                
+
                 // Calculate overdue
                 const now = new Date();
                 stats.overdue = items.filter(i => {
@@ -827,6 +827,83 @@
             }
 
             return stats;
+        },
+
+        // ============================================
+        // Cloud Backup Support (Google Drive)
+        // ============================================
+
+        /**
+         * Prepare data for cloud backup (includes all data + metadata)
+         * Used by BackupService to create encrypted backups
+         * @returns {Object} Complete backup data structure
+         */
+        prepareCloudBackup: function() {
+            return {
+                version: '3.0.0',
+                timestamp: new Date().toISOString(),
+                data: {
+                    clients: this.getAll('clients'),
+                    appointments: this.getAll('appointments'),
+                    tasks: this.getAll('tasks'),
+                    categories: this.getAll('categories'),
+                    interactions: this.getAll('interactions'),
+                    settings: {
+                        clientTypes: localStorage.getItem('clientTypes'),
+                        theme: localStorage.getItem('theme'),
+                        fontSize: localStorage.getItem('fontSize'),
+                        language: localStorage.getItem('language'),
+                        currency: localStorage.getItem('currency')
+                    }
+                },
+                metadata: {
+                    totalClients: this.getAll('clients').length,
+                    totalAppointments: this.getAll('appointments').length,
+                    totalTasks: this.getAll('tasks').length,
+                    deviceType: window.Capacitor?.isNativePlatform() ? 'mobile' : 'desktop',
+                    hasAttachments: this.checkHasAttachments()
+                }
+            };
+        },
+
+        /**
+         * Check if any clients have attachments
+         * @returns {boolean} True if at least one client has files
+         */
+        checkHasAttachments: function() {
+            const clients = this.getAll('clients');
+            return clients.some(client => client.files && client.files.length > 0);
+        },
+
+        /**
+         * Import from cloud backup with version validation
+         * @param {Object} backupData - Decrypted backup data
+         * @throws {Error} If backup version is incompatible
+         */
+        importCloudBackup: function(backupData) {
+            // Validate version compatibility
+            if (!backupData.version) {
+                throw new Error('Backup version not found');
+            }
+
+            const backupVersion = backupData.version;
+            const currentVersion = '3.0.0';
+
+            // Simple version check (major version must match)
+            const backupMajor = parseInt(backupVersion.split('.')[0]);
+            const currentMajor = parseInt(currentVersion.split('.')[0]);
+
+            if (backupMajor !== currentMajor) {
+                throw new Error(`Incompatible backup version: ${backupVersion}. Current version: ${currentVersion}`);
+            }
+
+            // Import data (replace mode - overwrites existing data)
+            if (backupData.data) {
+                this.importData(backupData.data, false);
+                console.log('✅ Cloud backup imported successfully');
+            } else {
+                throw new Error('No data found in backup');
+            }
         }
     };
 

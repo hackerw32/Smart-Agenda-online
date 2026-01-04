@@ -94,6 +94,7 @@
 
             const appointments = window.SmartAgenda.DataManager.getAll('appointments');
             const tasks = window.SmartAgenda.DataManager.getAll('tasks');
+            const clients = window.SmartAgenda.DataManager.getAll('clients');
 
             // Get ALL pending/active appointments with money
             const pendingAppointments = appointments.filter(apt => {
@@ -102,44 +103,121 @@
                 return true;
             });
 
-            // Get ALL pending tasks with money
+            // Get today's appointments
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            const todayAppointments = appointments.filter(apt => {
+                if (!apt.date) return false;
+                const aptDate = new Date(apt.date);
+                return aptDate >= today && aptDate < tomorrow;
+            });
+
+            // Get pending tasks
             const pendingTasks = tasks.filter(task => {
                 if (!task.amount) return false;
                 if (task.completed) return false;
                 return true;
             });
 
+            // Get today's tasks
+            const todayTasks = tasks.filter(task => {
+                if (!task.date) return false;
+                const taskDate = new Date(task.date);
+                return taskDate >= today && taskDate < tomorrow;
+            });
+
+            // Calculate revenue (τζίρος) - always use amount
             const appointmentsRevenue = pendingAppointments.reduce((total, apt) => total + (parseFloat(apt.amount) || 0), 0);
             const tasksRevenue = pendingTasks.reduce((total, task) => total + (parseFloat(task.amount) || 0), 0);
 
-            const currency = window.SmartAgenda.State.get('currentCurrency') || '€';
+            // Calculate profit (κέρδος) - use profit if exists, otherwise amount
+            const appointmentsProfit = pendingAppointments.reduce((total, apt) => {
+                const profit = apt.profit ? parseFloat(apt.profit) : parseFloat(apt.amount);
+                return total + (profit || 0);
+            }, 0);
+            const tasksProfit = pendingTasks.reduce((total, task) => {
+                const profit = task.profit ? parseFloat(task.profit) : parseFloat(task.amount);
+                return total + (profit || 0);
+            }, 0);
 
+            const currency = window.SmartAgenda.State.get('currentCurrency') || '€';
+            const totalRevenue = appointmentsRevenue + tasksRevenue;
+            const totalProfit = appointmentsProfit + tasksProfit;
+
+            // Compact dashboard with grid layout
             container.innerHTML = `
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px;">
-                    <div id="appointments-revenue-card" style="padding: 16px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)';" onmouseout="this.style.transform=''; this.style.boxShadow='';">
-                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Appointments (${pendingAppointments.length})</div>
-                        <div style="font-size: 24px; font-weight: 700; color: var(--primary-color);">${currency}${appointmentsRevenue.toFixed(2)}</div>
-                        <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">Click to view details</div>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px;">
+                    <!-- Today Stats -->
+                    <div style="padding: 12px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Σήμερα</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 18px; font-weight: 700; color: var(--text-primary);">${todayAppointments.length}</div>
+                                <div style="font-size: 10px; color: var(--text-tertiary);">Ραντεβού</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 18px; font-weight: 700; color: var(--text-primary);">${todayTasks.length}</div>
+                                <div style="font-size: 10px; color: var(--text-tertiary);">Tasks</div>
+                            </div>
+                        </div>
                     </div>
-                    <div id="tasks-revenue-card" style="padding: 16px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); cursor: pointer; transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.1)';" onmouseout="this.style.transform=''; this.style.boxShadow='';">
-                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px;">Tasks (${pendingTasks.length})</div>
-                        <div style="font-size: 24px; font-weight: 700; color: var(--success);">${currency}${tasksRevenue.toFixed(2)}</div>
-                        <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">Click to view details</div>
+
+                    <!-- Total Clients -->
+                    <div style="padding: 12px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                            </svg>
+                            <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Πελάτες</span>
+                        </div>
+                        <div>
+                            <div style="font-size: 18px; font-weight: 700; color: var(--text-primary);">${clients.length}</div>
+                            <div style="font-size: 10px; color: var(--text-tertiary);">Συνολικοί</div>
+                        </div>
+                    </div>
+
+                    <!-- Revenue Card -->
+                    <div style="padding: 12px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="1" x2="12" y2="23"></line>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                            </svg>
+                            <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Τζίρος</span>
+                        </div>
+                        <div>
+                            <div style="font-size: 18px; font-weight: 700; color: var(--primary-color);">${currency}${totalRevenue.toFixed(0)}</div>
+                            <div style="font-size: 10px; color: var(--text-tertiary);">Αναμενόμενος</div>
+                        </div>
+                    </div>
+
+                    <!-- Profit Card -->
+                    <div style="padding: 12px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                            </svg>
+                            <span style="font-size: 11px; font-weight: 600; color: var(--text-secondary);">Κέρδος</span>
+                        </div>
+                        <div>
+                            <div style="font-size: 18px; font-weight: 700; color: var(--success);">${currency}${totalProfit.toFixed(0)}</div>
+                            <div style="font-size: 10px; color: var(--text-tertiary);">Αναμενόμενο</div>
+                        </div>
                     </div>
                 </div>
             `;
-
-            // Bind click events to show modals
-            const appointmentsCard = document.getElementById('appointments-revenue-card');
-            const tasksCard = document.getElementById('tasks-revenue-card');
-
-            appointmentsCard?.addEventListener('click', () => {
-                this.showRevenueDetailsModal('appointments');
-            });
-
-            tasksCard?.addEventListener('click', () => {
-                this.showRevenueDetailsModal('tasks');
-            });
         },
 
         // ============================================
@@ -163,31 +241,30 @@
                     return daysDiff >= 0 && daysDiff <= 7;
                 })
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
-                .slice(0, 5);
+                .slice(0, 3);
 
             container.innerHTML = '';
 
             if (upcoming.length === 0) {
                 container.innerHTML = `
-                    <div class="dashboard-empty">
-                        <p>No upcoming appointments</p>
+                    <div style="padding: 12px; text-align: center; color: var(--text-tertiary); font-size: 13px;">
+                        Δεν υπάρχουν ραντεβού
                     </div>
                 `;
                 return;
             }
 
             upcoming.forEach(apt => {
-                const item = this.createDashboardItem({
-                    icon: '📅',
+                const item = this.createCompactDashboardItem({
+                    icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
                     title: apt.clientName || 'Appointment',
-                    subtitle: this.stripHtml(apt.desc || ''),
+                    subtitle: this.stripHtml(apt.desc || '').substring(0, 40) + '...',
                     meta: this.formatDate(apt.date),
+                    color: '#2196F3',
                     onClick: () => {
-                        // Switch to appointments tab and open the specific appointment
                         if (window.SmartAgenda?.Navigation) {
                             window.SmartAgenda.Navigation.switchTab('appointments');
                         }
-                        // After a short delay, open the appointment modal
                         setTimeout(() => {
                             if (window.SmartAgenda.Appointments) {
                                 window.SmartAgenda.Appointments.showAppointmentModal(apt);
@@ -197,6 +274,17 @@
                 });
                 container.appendChild(item);
             });
+
+            // Add "View All" button
+            const viewAllBtn = document.createElement('div');
+            viewAllBtn.style.cssText = 'padding: 8px; text-align: center; color: var(--primary-color); font-size: 12px; font-weight: 600; cursor: pointer; border-top: 1px solid var(--border); margin-top: 8px;';
+            viewAllBtn.textContent = `Δείτε όλα (${appointments.filter(apt => !apt.completed).length})`;
+            viewAllBtn.onclick = () => {
+                if (window.SmartAgenda?.Navigation) {
+                    window.SmartAgenda.Navigation.switchTab('appointments');
+                }
+            };
+            container.appendChild(viewAllBtn);
         },
 
         // ============================================
@@ -213,7 +301,15 @@
             const pending = tasks
                 .filter(task => !task.completed)
                 .sort((a, b) => {
-                    // Sort by date
+                    // Sort by priority first, then date
+                    const priorityOrder = { high: 0, medium: 1, low: 2 };
+                    const aPriority = priorityOrder[a.priority] ?? 3;
+                    const bPriority = priorityOrder[b.priority] ?? 3;
+
+                    if (aPriority !== bPriority) {
+                        return aPriority - bPriority;
+                    }
+
                     if (a.date && b.date) {
                         return new Date(a.date) - new Date(b.date);
                     }
@@ -221,37 +317,38 @@
                     if (b.date) return 1;
                     return 0;
                 })
-                .slice(0, 5);
+                .slice(0, 3);
 
             container.innerHTML = '';
 
             if (pending.length === 0) {
                 container.innerHTML = `
-                    <div class="dashboard-empty">
-                        <p>No pending tasks</p>
+                    <div style="padding: 12px; text-align: center; color: var(--text-tertiary); font-size: 13px;">
+                        Δεν υπάρχουν εκκρεμή tasks
                     </div>
                 `;
                 return;
             }
 
             pending.forEach(task => {
-                const priorityColors = {
-                    high: '🔴',
-                    medium: '🟡',
-                    low: '🟢'
+                const priorityConfig = {
+                    high: { icon: '🔴', color: '#ef4444' },
+                    medium: { icon: '🟠', color: '#f59e0b' },
+                    low: { icon: '🟢', color: '#10b981' }
                 };
 
-                const item = this.createDashboardItem({
-                    icon: priorityColors[task.priority] || '✓',
-                    title: task.clientName || this.stripHtml(task.desc || '') || 'Task',
-                    subtitle: task.clientName ? this.stripHtml(task.desc || '') : '',
-                    meta: task.date ? this.formatDate(task.date) : '',
+                const priority = priorityConfig[task.priority] || { icon: '⚪', color: '#6b7280' };
+
+                const item = this.createCompactDashboardItem({
+                    icon: `<span style="font-size: 14px;">${priority.icon}</span>`,
+                    title: task.clientName || this.stripHtml(task.desc || '').substring(0, 30) || 'Task',
+                    subtitle: task.clientName ? this.stripHtml(task.desc || '').substring(0, 30) : (task.date ? this.formatDate(task.date) : ''),
+                    meta: task.date && !task.clientName ? '' : (task.date ? this.formatDate(task.date) : ''),
+                    color: priority.color,
                     onClick: () => {
-                        // Switch to tasks tab and open the specific task
                         if (window.SmartAgenda?.Navigation) {
                             window.SmartAgenda.Navigation.switchTab('tasks');
                         }
-                        // After a short delay, open the task modal
                         setTimeout(() => {
                             if (window.SmartAgenda.Tasks) {
                                 window.SmartAgenda.Tasks.showTaskModal(task);
@@ -261,6 +358,17 @@
                 });
                 container.appendChild(item);
             });
+
+            // Add "View All" button
+            const viewAllBtn = document.createElement('div');
+            viewAllBtn.style.cssText = 'padding: 8px; text-align: center; color: var(--primary-color); font-size: 12px; font-weight: 600; cursor: pointer; border-top: 1px solid var(--border); margin-top: 8px;';
+            viewAllBtn.textContent = `Δείτε όλα (${tasks.filter(t => !t.completed).length})`;
+            viewAllBtn.onclick = () => {
+                if (window.SmartAgenda?.Navigation) {
+                    window.SmartAgenda.Navigation.switchTab('tasks');
+                }
+            };
+            container.appendChild(viewAllBtn);
         },
 
         // ============================================
@@ -291,7 +399,7 @@
 
             recent.forEach(client => {
                 const item = this.createDashboardItem({
-                    icon: '👤',
+                    icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
                     title: client.name,
                     subtitle: client.phone || client.email || client.address || '',
                     meta: client.customerType === 'existing' ? 'Existing' : 'Potential',
@@ -312,58 +420,91 @@
             this.renderRevenueChart();
         },
 
-        renderTopClients: function() {
+        renderTopClients: function(mode = 'revenue') {
             const container = document.getElementById('top-clients-list');
             if (!container) return;
 
             const appointments = window.SmartAgenda.DataManager.getAll('appointments');
             const clients = window.SmartAgenda.DataManager.getAll('clients');
 
-            // Calculate revenue per client - only count paid and partial payments
-            const clientRevenue = {};
+            // Calculate revenue and profit per client
+            const clientData = {};
             appointments.forEach(apt => {
                 if (apt.client && apt.amount) {
-                    if (!clientRevenue[apt.client]) {
-                        clientRevenue[apt.client] = 0;
+                    if (!clientData[apt.client]) {
+                        clientData[apt.client] = { revenue: 0, profit: 0 };
                     }
                     // Only count paid and partial payments
                     if (apt.paid === 'paid') {
-                        clientRevenue[apt.client] += parseFloat(apt.amount) || 0;
+                        const amount = parseFloat(apt.amount) || 0;
+                        clientData[apt.client].revenue += amount;
+                        // Use profit if exists, otherwise amount
+                        const profit = apt.profit ? parseFloat(apt.profit) : amount;
+                        clientData[apt.client].profit += profit;
                     } else if (apt.paid === 'partial') {
-                        clientRevenue[apt.client] += parseFloat(apt.amountPaid) || 0;
+                        const amountPaid = parseFloat(apt.amountPaid) || 0;
+                        clientData[apt.client].revenue += amountPaid;
+                        // For partial, calculate proportional profit
+                        const fullAmount = parseFloat(apt.amount) || 0;
+                        const profitValue = apt.profit ? parseFloat(apt.profit) : fullAmount;
+                        const proportionalProfit = (profitValue / fullAmount) * amountPaid;
+                        clientData[apt.client].profit += proportionalProfit;
                     }
                 }
             });
 
-            // Get top 5 clients
-            const topClients = Object.entries(clientRevenue)
-                .map(([clientId, revenue]) => {
+            // Get top 5 clients based on selected mode
+            const sortKey = mode === 'profit' ? 'profit' : 'revenue';
+            const topClients = Object.entries(clientData)
+                .map(([clientId, data]) => {
                     const client = clients.find(c => String(c.id) === String(clientId));
                     return {
                         client: client,
-                        revenue: revenue
+                        revenue: data.revenue,
+                        profit: data.profit
                     };
                 })
                 .filter(item => item.client)
-                .sort((a, b) => b.revenue - a.revenue)
+                .sort((a, b) => b[sortKey] - a[sortKey])
                 .slice(0, 5);
 
             container.innerHTML = '';
 
+            // Add toggle button at the top
+            const toggleContainer = document.createElement('div');
+            toggleContainer.style.cssText = 'display: flex; justify-content: center; margin-bottom: 16px;';
+            toggleContainer.innerHTML = `
+                <div style="display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px;">
+                    <button id="toggle-revenue" style="padding: 6px 16px; border: none; background: ${mode === 'revenue' ? 'var(--primary-color)' : 'transparent'}; color: ${mode === 'revenue' ? 'white' : 'var(--text-primary)'}; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;">
+                        Τζίρος
+                    </button>
+                    <button id="toggle-profit" style="padding: 6px 16px; border: none; background: ${mode === 'profit' ? 'var(--success)' : 'transparent'}; color: ${mode === 'profit' ? 'white' : 'var(--text-primary)'}; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s;">
+                        Κέρδος
+                    </button>
+                </div>
+            `;
+            container.appendChild(toggleContainer);
+
+            // Bind toggle events
+            const revenueBtn = container.querySelector('#toggle-revenue');
+            const profitBtn = container.querySelector('#toggle-profit');
+            revenueBtn.addEventListener('click', () => this.renderTopClients('revenue'));
+            profitBtn.addEventListener('click', () => this.renderTopClients('profit'));
+
             if (topClients.length === 0) {
-                container.innerHTML = `
-                    <div class="dashboard-empty">
-                        <p>No revenue data yet</p>
-                    </div>
-                `;
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'dashboard-empty';
+                emptyDiv.innerHTML = '<p>No revenue data yet</p>';
+                container.appendChild(emptyDiv);
                 return;
             }
 
             const currency = window.SmartAgenda.State.get('currentCurrency') || '€';
-            const maxRevenue = topClients[0].revenue;
+            const maxValue = topClients[0][sortKey];
 
             topClients.forEach((item, index) => {
-                const percentage = (item.revenue / maxRevenue) * 100;
+                const value = item[sortKey];
+                const percentage = (value / maxValue) * 100;
                 const clientItem = document.createElement('div');
                 clientItem.className = 'top-client-item';
                 clientItem.style.cssText = 'margin-bottom: 16px;';
@@ -373,7 +514,7 @@
                             <span style="font-weight: 600; color: var(--primary-color);">#${index + 1}</span>
                             <span style="font-weight: 500;">${this.escapeHtml(item.client.name)}</span>
                         </div>
-                        <span style="font-weight: 600; color: var(--success);">${currency}${item.revenue.toFixed(2)}</span>
+                        <span style="font-weight: 600; color: var(--success);">${currency}${value.toFixed(2)}</span>
                     </div>
                     <div style="width: 100%; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;">
                         <div style="width: ${percentage}%; height: 100%; background: linear-gradient(90deg, var(--primary-color), var(--success)); transition: width 0.3s ease;"></div>
@@ -513,7 +654,13 @@
             if (filteredItems.length === 0) {
                 content = `
                     <div style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
-                        <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+                        <div style="margin-bottom: 16px;">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block; margin: 0 auto;">
+                                <line x1="18" y1="20" x2="18" y2="10"></line>
+                                <line x1="12" y1="20" x2="12" y2="4"></line>
+                                <line x1="6" y1="20" x2="6" y2="14"></line>
+                            </svg>
+                        </div>
                         <div>No ${itemType}s found</div>
                     </div>
                 `;
@@ -555,7 +702,15 @@
                                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                                         <div style="flex: 1; min-width: 0;">
                                             <div style="font-weight: 600; font-size: 15px; color: var(--text-primary); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(itemName)}</div>
-                                            <div style="font-size: 12px; color: var(--text-secondary);">📅 ${dateTimeStr}</div>
+                                            <div style="font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px;">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                                </svg>
+                                                <span>${dateTimeStr}</span>
+                                            </div>
                                         </div>
                                         <div style="font-size: 18px; font-weight: 700; color: var(--success); margin-left: 12px; white-space: nowrap;">${currency}${amount.toFixed(2)}</div>
                                     </div>
@@ -641,6 +796,58 @@
                 </div>
                 ${meta ? `<div class="dashboard-item-meta">${this.escapeHtml(meta)}</div>` : ''}
             `;
+
+            if (onClick) {
+                item.addEventListener('click', onClick);
+            }
+
+            return item;
+        },
+
+        /**
+         * Create a compact dashboard item (smaller, condensed)
+         */
+        createCompactDashboardItem: function(options) {
+            const { icon, title, subtitle, meta, color, onClick } = options;
+
+            const item = document.createElement('div');
+            item.style.cssText = `
+                display: flex;
+                align-items: center;
+                padding: 10px 12px;
+                background: var(--surface);
+                border-radius: 8px;
+                border: 1px solid var(--border);
+                margin-bottom: 8px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            `;
+
+            item.innerHTML = `
+                <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: ${color ? color + '15' : 'var(--primary-light)'}; color: ${color || 'var(--primary-color)'}; margin-right: 12px; flex-shrink: 0;">
+                    ${icon}
+                </div>
+                <div style="flex: 1; min-width: 0; overflow: hidden;">
+                    <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        ${this.escapeHtml(title)}
+                    </div>
+                    ${subtitle ? `<div style="font-size: 11px; color: var(--text-tertiary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${this.escapeHtml(subtitle)}</div>` : ''}
+                </div>
+                ${meta ? `<div style="font-size: 11px; color: var(--text-secondary); margin-left: 8px; flex-shrink: 0;">${this.escapeHtml(meta)}</div>` : ''}
+            `;
+
+            // Hover effect
+            item.addEventListener('mouseenter', () => {
+                item.style.transform = 'translateX(4px)';
+                item.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                item.style.borderColor = color || 'var(--primary-color)';
+            });
+
+            item.addEventListener('mouseleave', () => {
+                item.style.transform = 'translateX(0)';
+                item.style.boxShadow = 'none';
+                item.style.borderColor = 'var(--border)';
+            });
 
             if (onClick) {
                 item.addEventListener('click', onClick);

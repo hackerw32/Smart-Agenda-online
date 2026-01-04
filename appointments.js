@@ -196,7 +196,7 @@
 
         createAppointmentCard: function(apt) {
             const card = document.createElement('div');
-            card.className = 'appointment-item';
+            card.className = 'appointment-item modern-appointment-card';
             card.dataset.id = apt.id;
 
             // Set default status if not present
@@ -206,17 +206,21 @@
             if (status === 'cancelled') card.classList.add('cancelled');
             if (this.isOverdue(apt) && status !== 'completed' && status !== 'cancelled') card.classList.add('overdue');
 
-            const priorityColors = { high: '#ef4444', medium: '#f59e0b', low: '#10b981' };
-            const priorityColor = priorityColors[apt.priority] || '#3b82f6';
-
-            const statusColors = {
-                pending: '#94a3b8',
-                cancelled: '#ef4444',
-                completed: '#64748b'
+            const priorityConfig = {
+                high: { icon: '🔴', color: '#ef4444', label: 'High' },
+                medium: { icon: '🟠', color: '#f59e0b', label: 'Medium' },
+                low: { icon: '🟢', color: '#10b981', label: 'Low' }
             };
-            const statusColor = statusColors[status] || '#94a3b8';
+            const priority = priorityConfig[apt.priority] || priorityConfig.medium;
 
-            const clientName = apt.clientName || this.getClientName(apt.client) || 'Standalone Appointment';
+            const statusConfig = {
+                pending: { color: '#3b82f6', bgColor: '#3b82f622', icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>` },
+                cancelled: { color: '#ef4444', bgColor: '#ef444422', icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>` },
+                completed: { color: '#10b981', bgColor: '#10b98122', icon: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>` }
+            };
+            const statusInfo = statusConfig[status] || statusConfig.pending;
+
+            const clientName = apt.clientName || this.getClientName(apt.client) || 'Standalone';
             const dateTimeDisplay = apt.date ? this.formatDateTime(apt.date) : '';
 
             // Get translated status and priority
@@ -224,27 +228,82 @@
             const translatedStatus = i18n.translate(`status.${status}`);
             const translatedPriority = i18n.translate(`priority.${apt.priority || 'medium'}`);
 
+            // Payment status icon
+            let paymentIcon = '';
+            if (apt.amount) {
+                if (apt.paid === 'paid') {
+                    paymentIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+                } else if (apt.paid === 'partial') {
+                    paymentIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+                } else {
+                    paymentIcon = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+                }
+            }
+
             card.innerHTML = `
-                <div class="appointment-content">
-                    <div class="appointment-header">
-                        <div class="appointment-title">${this.escapeHtml(clientName)}</div>
-                        ${dateTimeDisplay ? `<div class="appointment-datetime">${dateTimeDisplay}</div>` : ''}
-                    </div>
-                    ${apt.desc ? `<div class="appointment-description">${this.escapeHtml(this.stripHtml(apt.desc).substring(0, 100))}${this.stripHtml(apt.desc).length > 100 ? '...' : ''}</div>` : ''}
-                    <div class="appointment-footer">
-                        <span class="appointment-status" style="background: ${statusColor}22; color: ${statusColor}; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase;">
-                            ${translatedStatus}
-                        </span>
-                        <span class="appointment-priority" style="color: ${priorityColor}; font-size: 12px; font-weight: 600; text-transform: uppercase;">
-                            ${translatedPriority}
-                        </span>
-                        ${apt.amount ? `
-                            <span class="appointment-amount" style="display: inline-flex; align-items: center; gap: 4px;">
-                                ${window.SmartAgenda.State.get('currentCurrency')}${parseFloat(apt.amount).toFixed(2)}
-                                ${apt.paid === 'paid' ? '<span style="color: #10b981;">✓</span>' : apt.paid === 'partial' ? '<span style="color: #f59e0b;">⊗</span>' : '<span style="color: #ef4444;">✗</span>'}
-                            </span>
+                <div style="display: flex; gap: 12px; width: 100%;">
+                    <!-- Priority Indicator -->
+                    <div style="width: 4px; background: ${priority.color}; border-radius: 4px; flex-shrink: 0;"></div>
+
+                    <div style="flex: 1; min-width: 0;">
+                        <!-- Header -->
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                                <div style="font-size: 15px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    ${this.escapeHtml(clientName)}
+                                </div>
+                                ${apt.isStandalone ? `<span style="background: var(--primary-light); color: var(--primary-color); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; flex-shrink: 0;">Standalone</span>` : ''}
+                            </div>
+                            <div style="font-size: 16px; flex-shrink: 0;">${priority.icon}</div>
+                        </div>
+
+                        <!-- Date & Time -->
+                        ${dateTimeDisplay ? `
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 13px; color: var(--text-secondary);">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                <span>${dateTimeDisplay}</span>
+                            </div>
                         ` : ''}
-                        ${apt.isStandalone ? `<span class="appointment-standalone-badge">📌 Standalone</span>` : ''}
+
+                        <!-- Description -->
+                        ${apt.desc ? `
+                            <div style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 10px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4;">
+                                ${this.escapeHtml(this.stripHtml(apt.desc))}
+                            </div>
+                        ` : ''}
+
+                        <!-- Footer -->
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <!-- Status Badge -->
+                            <div style="display: inline-flex; align-items: center; gap: 4px; background: ${statusInfo.bgColor}; color: ${statusInfo.color}; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;">
+                                ${statusInfo.icon}
+                                <span>${translatedStatus}</span>
+                            </div>
+
+                            <!-- Amount -->
+                            ${apt.amount ? `
+                                <div style="display: inline-flex; align-items: center; gap: 4px; background: var(--surface); border: 1px solid var(--border); padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--text-primary);">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                    </svg>
+                                    <span>${window.SmartAgenda.State.get('currentCurrency')}${parseFloat(apt.amount).toFixed(2)}</span>
+                                    ${paymentIcon}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Chevron -->
+                    <div style="flex-shrink: 0; display: flex; align-items: center;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
                     </div>
                 </div>
             `;
@@ -355,13 +414,15 @@
                         name: 'time',
                         label: i18n.translate('appointment.time') + ' (start)',
                         type: 'time',
-                        placeholder: '14:00'
+                        placeholder: '14:00',
+                        width: '48%'
                     },
                     {
                         name: 'endTime',
                         label: i18n.translate('appointment.time') + ' (end - optional)',
                         type: 'time',
-                        placeholder: '15:00'
+                        placeholder: '15:00',
+                        width: '48%'
                     },
                     {
                         name: 'priority',
@@ -375,10 +436,25 @@
                     },
                     {
                         name: 'amount',
-                        label: i18n.translate('appointment.amount') + ' (optional)',
+                        label: 'Τζίρος',
                         type: 'number',
                         placeholder: '0.00',
-                        step: '0.01'
+                        step: '0.01',
+                        width: 'calc(50% - 8px)',
+                        newRow: true
+                    },
+                    {
+                        name: 'profit',
+                        label: 'Κέρδος',
+                        type: 'number',
+                        placeholder: '0.00',
+                        step: '0.01',
+                        width: 'calc(50% - 6px)'
+                    },
+                    {
+                        name: 'profit-note',
+                        type: 'note',
+                        text: 'ℹ️ Αν συμπληρωθεί το Κέρδος, μόνο αυτό θα υπολογίζεται στο ημερολόγιο οικονομικών.'
                     },
                     {
                         name: 'desc',
@@ -408,18 +484,22 @@
                         name: 'time',
                         label: i18n.translate('appointment.time') + ' (start)',
                         type: 'time',
-                        placeholder: '14:00'
+                        placeholder: '14:00',
+                        width: '48%'
                     },
                     {
                         name: 'endTime',
                         label: i18n.translate('appointment.time') + ' (end - optional)',
                         type: 'time',
-                        placeholder: '15:00'
+                        placeholder: '15:00',
+                        width: '48%'
                     },
                     {
                         name: 'status',
                         label: i18n.translate('appointment.status'),
                         type: 'select',
+                        width: '48%',
+                        newRow: true,
                         options: [
                             { value: 'pending', label: i18n.translate('status.pending') },
                             { value: 'cancelled', label: i18n.translate('status.cancelled') },
@@ -430,6 +510,7 @@
                         name: 'priority',
                         label: i18n.translate('appointment.priority'),
                         type: 'select',
+                        width: '48%',
                         options: [
                             { value: 'low', label: i18n.translate('priority.low') },
                             { value: 'medium', label: i18n.translate('priority.medium') },
@@ -438,10 +519,25 @@
                     },
                     {
                         name: 'amount',
-                        label: i18n.translate('appointment.amount'),
+                        label: 'Τζίρος',
                         type: 'number',
                         placeholder: '0.00',
-                        step: '0.01'
+                        step: '0.01',
+                        width: 'calc(50% - 8px)',
+                        newRow: true
+                    },
+                    {
+                        name: 'profit',
+                        label: 'Κέρδος',
+                        type: 'number',
+                        placeholder: '0.00',
+                        step: '0.01',
+                        width: 'calc(50% - 6px)'
+                    },
+                    {
+                        name: 'profit-note',
+                        type: 'note',
+                        text: 'ℹ️ Αν συμπληρωθεί το Κέρδος, μόνο αυτό θα υπολογίζεται στο ημερολόγιο οικονομικών.'
                     },
                     {
                         name: 'paid',
@@ -480,13 +576,15 @@
                         name: 'time',
                         label: i18n.translate('appointment.time') + ' (start)',
                         type: 'time',
-                        placeholder: '14:00'
+                        placeholder: '14:00',
+                        width: '48%'
                     },
                     {
                         name: 'endTime',
                         label: i18n.translate('appointment.time') + ' (end - optional)',
                         type: 'time',
-                        placeholder: '15:00'
+                        placeholder: '15:00',
+                        width: '48%'
                     },
                     {
                         name: 'priority',
@@ -500,10 +598,25 @@
                     },
                     {
                         name: 'amount',
-                        label: i18n.translate('appointment.amount') + ' (optional)',
+                        label: 'Τζίρος',
                         type: 'number',
                         placeholder: '0.00',
-                        step: '0.01'
+                        step: '0.01',
+                        width: 'calc(50% - 8px)',
+                        newRow: true
+                    },
+                    {
+                        name: 'profit',
+                        label: 'Κέρδος',
+                        type: 'number',
+                        placeholder: '0.00',
+                        step: '0.01',
+                        width: 'calc(50% - 6px)'
+                    },
+                    {
+                        name: 'profit-note',
+                        type: 'note',
+                        text: 'ℹ️ Αν συμπληρωθεί το Κέρδος, μόνο αυτό θα υπολογίζεται στο ημερολόγιο οικονομικών.'
                     },
                     {
                         name: 'desc',
@@ -545,7 +658,7 @@
             if (isEdit) {
                 // Complete button first when editing - sets both status and payment status
                 buttons.push({
-                    label: appointment.status === 'completed' ? 'Mark as Incomplete' : i18n.translate('actions.complete'),
+                    label: appointment.status === 'completed' ? i18n.translate('actions.incomplete') : i18n.translate('actions.complete'),
                     type: appointment.status === 'completed' ? 'secondary' : 'success',
                     action: 'complete',
                     onClick: (modal) => {
@@ -585,7 +698,13 @@
 
                 // Delete button for editing
                 buttons.push({
-                    label: i18n.translate('actions.delete'),
+                    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18"></path>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>`,
                     type: 'danger',
                     action: 'delete',
                     onClick: (modal) => this.deleteAppointment(modal, appointment.id)
@@ -714,6 +833,24 @@
                 }
             } else {
                 delete values.amount; // Remove empty amounts
+            }
+
+            // Parse profit - convert to number or remove if empty
+            if (values.profit !== undefined && values.profit !== '') {
+                const parsedProfit = parseFloat(values.profit);
+                if (!isNaN(parsedProfit) && parsedProfit >= 0) {
+                    values.profit = parsedProfit;
+                } else {
+                    delete values.profit; // Remove invalid profit
+                }
+            } else {
+                delete values.profit; // Remove empty profit
+            }
+
+            // Validate: profit must be <= amount
+            if (values.profit && values.amount && values.profit > values.amount) {
+                window.SmartAgenda.Toast.error('Το κέρδος δεν μπορεί να είναι μεγαλύτερο από το ποσό!');
+                return;
             }
 
             // Get amountPaid from hidden field if it exists (for partial payments)
@@ -911,7 +1048,7 @@
                     </div>
                     <button type="button" id="manage-notifications-btn"
                             style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
-                        <span>${appointment ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                        <span>${appointment ? 'Επεξεργασία' : 'Προσθήκη'}</span>
                     </button>
                 </div>
                 ${notifCount > 0 ? `
@@ -959,7 +1096,7 @@
                             </div>
                             <button type="button" id="manage-notifications-btn"
                                     style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
-                                <span>${appointment ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                                <span>${appointment ? 'Επεξεργασία' : 'Προσθήκη'}</span>
                             </button>
                         `;
 
@@ -1236,16 +1373,7 @@
             wrapper.appendChild(searchInput);
             wrapper.appendChild(selectElement);
 
-            // Load More button
-            const loadMoreBtn = document.createElement('button');
-            loadMoreBtn.type = 'button';
-            loadMoreBtn.className = 'btn-secondary';
-            loadMoreBtn.textContent = 'Φόρτωση περισσότερων...';
-            loadMoreBtn.style.cssText = 'width: 100%; margin-top: 8px; display: none;';
-            wrapper.appendChild(loadMoreBtn);
-
             const allOptions = Array.from(selectElement.options);
-            let itemsToShow = 25;
             let currentSearchTerm = '';
 
             const renderOptions = () => {
@@ -1254,34 +1382,16 @@
 
                 let filtered = allOptions;
                 if (searchTerm) {
-                    // When searching, show all results
+                    // When searching, show all matching results
                     filtered = allOptions.filter(option =>
                         option.text.toLowerCase().includes(searchTerm) || option.value === ''
                     );
-                    loadMoreBtn.style.display = 'none';
                 } else {
-                    // When not searching, apply pagination
-                    const optionsToShow = allOptions.slice(0, itemsToShow + 1); // +1 for empty option
-                    optionsToShow.forEach(option => {
-                        selectElement.appendChild(option.cloneNode(true));
-                    });
-
-                    // Show/hide Load More button
-                    if (allOptions.length > itemsToShow + 1) {
-                        loadMoreBtn.style.display = 'block';
-                        loadMoreBtn.textContent = `Φόρτωση περισσότερων (${allOptions.length - itemsToShow - 1} remaining)`;
-                    } else {
-                        loadMoreBtn.style.display = 'none';
-                    }
-
-                    const currentValue = selectElement.dataset.currentValue;
-                    if (currentValue) {
-                        selectElement.value = currentValue;
-                    }
-                    return;
+                    // When not searching, show ALL clients (no pagination)
+                    filtered = allOptions;
                 }
 
-                // Render filtered results (when searching)
+                // Render all filtered results
                 filtered.forEach(option => {
                     selectElement.appendChild(option.cloneNode(true));
                 });
@@ -1294,12 +1404,6 @@
 
             searchInput.addEventListener('input', (e) => {
                 currentSearchTerm = e.target.value;
-                itemsToShow = 25; // Reset pagination on new search
-                renderOptions();
-            });
-
-            loadMoreBtn.addEventListener('click', () => {
-                itemsToShow += 25;
                 renderOptions();
             });
 
@@ -1307,7 +1411,7 @@
                 selectElement.dataset.currentValue = e.target.value;
             });
 
-            // Initial render
+            // Initial render - show all clients
             renderOptions();
         },
 

@@ -80,8 +80,8 @@
                     }
 
                     // Switch to calendar tab
-                    if (window.SmartAgenda.TabManager) {
-                        window.SmartAgenda.TabManager.switchTab('calendar');
+                    if (window.SmartAgenda.Navigation) {
+                        window.SmartAgenda.Navigation.switchTab('calendar');
                     }
 
                     // Open appointment modal (even if completed/cancelled)
@@ -100,8 +100,8 @@
                     }
 
                     // Switch to tasks tab
-                    if (window.SmartAgenda.TabManager) {
-                        window.SmartAgenda.TabManager.switchTab('tasks');
+                    if (window.SmartAgenda.Navigation) {
+                        window.SmartAgenda.Navigation.switchTab('tasks');
                     }
 
                     // Open task modal (even if completed)
@@ -127,8 +127,8 @@
                     }
 
                     // Switch to interactions tab
-                    if (window.SmartAgenda.TabManager) {
-                        window.SmartAgenda.TabManager.switchTab('interactions');
+                    if (window.SmartAgenda.Navigation) {
+                        window.SmartAgenda.Navigation.switchTab('interactions');
                     }
 
                     // Open interaction modal (even if completed)

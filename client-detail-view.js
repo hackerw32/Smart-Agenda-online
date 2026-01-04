@@ -46,37 +46,94 @@
                     <!-- Action Buttons -->
                     <div class="client-actions">
                         <button class="action-btn" id="btn-new-appointment">
-                            <span class="action-icon">📅</span>
+                            <span class="action-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </span>
                             <span>New Appointment</span>
                         </button>
                         <button class="action-btn" id="btn-new-task">
-                            <span class="action-icon">✓</span>
+                            <span class="action-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 11l3 3L22 4"></path>
+                                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                                </svg>
+                            </span>
                             <span>New Task</span>
                         </button>
                         <button class="action-btn" id="btn-maps">
-                            <span class="action-icon">🗺️</span>
+                            <span class="action-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                                    <line x1="8" y1="2" x2="8" y2="18"></line>
+                                    <line x1="16" y1="6" x2="16" y2="22"></line>
+                                </svg>
+                            </span>
                             <span>Maps</span>
                         </button>
                         <button class="action-btn" id="btn-sms">
-                            <span class="action-icon">💬</span>
+                            <span class="action-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                </svg>
+                            </span>
                             <span>SMS</span>
                         </button>
                     </div>
 
                     <!-- Client Information -->
                     <div class="client-info-section">
-                        <h3>📋 Client Information</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; cursor: pointer;" class="collapsible-header" data-target="client-info-content">
+                            <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                                    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                                </svg>
+                                Client Information
+                                <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition: transform 0.2s;">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </h3>
+                            <button class="action-btn" id="btn-share-client" style="padding: 8px 16px; font-size: 14px;" onclick="event.stopPropagation();">
+                                <span class="action-icon">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="18" cy="5" r="3"></circle>
+                                        <circle cx="6" cy="12" r="3"></circle>
+                                        <circle cx="18" cy="19" r="3"></circle>
+                                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                                    </svg>
+                                </span>
+                                <span>Share</span>
+                            </button>
+                        </div>
+                        <div class="collapsible-content" id="client-info-content" style="overflow: hidden; transition: max-height 0.3s ease;">
                         <div class="info-grid">
                             ${client.contactName ? `
                                 <div class="info-item">
-                                    <div class="info-label">👥 Contact Person</div>
+                                    <div class="info-label" style="display: flex; align-items: center; gap: 6px;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                            <circle cx="12" cy="7" r="4"></circle>
+                                        </svg>
+                                        Contact Person
+                                    </div>
                                     <div class="info-value">${this.escapeHtml(client.contactName)}</div>
                                 </div>
                             ` : ''}
                             ${this.getClientTypesHTML(client)}
                             ${client.phone ? `
                                 <div class="info-item">
-                                    <div class="info-label">📞 Phone${client.phoneType ? ' (' + client.phoneType.charAt(0).toUpperCase() + client.phoneType.slice(1) + ')' : ''}</div>
+                                    <div class="info-label" style="display: flex; align-items: center; gap: 6px;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                                        </svg>
+                                        Phone${client.phoneType ? ' (' + client.phoneType.charAt(0).toUpperCase() + client.phoneType.slice(1) + ')' : ''}
+                                    </div>
                                     <div class="info-value">
                                         <a href="tel:${client.phone}" class="info-link">${this.escapeHtml(client.phone)}</a>
                                     </div>
@@ -84,7 +141,12 @@
                             ` : ''}
                             ${client.phone2 ? `
                                 <div class="info-item">
-                                    <div class="info-label">📞 Phone 2${client.phone2Type ? ' (' + client.phone2Type.charAt(0).toUpperCase() + client.phone2Type.slice(1) + ')' : ''}</div>
+                                    <div class="info-label" style="display: flex; align-items: center; gap: 6px;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                                        </svg>
+                                        Phone 2${client.phone2Type ? ' (' + client.phone2Type.charAt(0).toUpperCase() + client.phone2Type.slice(1) + ')' : ''}
+                                    </div>
                                     <div class="info-value">
                                         <a href="tel:${client.phone2}" class="info-link">${this.escapeHtml(client.phone2)}</a>
                                     </div>
@@ -92,7 +154,13 @@
                             ` : ''}
                             ${client.email ? `
                                 <div class="info-item">
-                                    <div class="info-label">📧 Email${client.emailType ? ' (' + client.emailType.charAt(0).toUpperCase() + client.emailType.slice(1) + ')' : ''}</div>
+                                    <div class="info-label" style="display: flex; align-items: center; gap: 6px;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                            <polyline points="22,6 12,13 2,6"></polyline>
+                                        </svg>
+                                        Email${client.emailType ? ' (' + client.emailType.charAt(0).toUpperCase() + client.emailType.slice(1) + ')' : ''}
+                                    </div>
                                     <div class="info-value">
                                         <a href="mailto:${client.email}" class="info-link">${this.escapeHtml(client.email)}</a>
                                     </div>
@@ -100,7 +168,13 @@
                             ` : ''}
                             ${client.email2 ? `
                                 <div class="info-item">
-                                    <div class="info-label">📧 Email 2${client.email2Type ? ' (' + client.email2Type.charAt(0).toUpperCase() + client.email2Type.slice(1) + ')' : ''}</div>
+                                    <div class="info-label" style="display: flex; align-items: center; gap: 6px;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                                            <polyline points="22,6 12,13 2,6"></polyline>
+                                        </svg>
+                                        Email 2${client.email2Type ? ' (' + client.email2Type.charAt(0).toUpperCase() + client.email2Type.slice(1) + ')' : ''}
+                                    </div>
                                     <div class="info-value">
                                         <a href="mailto:${client.email2}" class="info-link">${this.escapeHtml(client.email2)}</a>
                                     </div>
@@ -108,7 +182,13 @@
                             ` : ''}
                             ${client.address ? `
                                 <div class="info-item full-width">
-                                    <div class="info-label">📍 Address (Legacy)</div>
+                                    <div class="info-label" style="display: flex; align-items: center; gap: 6px;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                            <circle cx="12" cy="10" r="3"></circle>
+                                        </svg>
+                                        Address (Legacy)
+                                    </div>
                                     <div class="info-value">${this.escapeHtml(client.address)}</div>
                                 </div>
                             ` : ''}
@@ -117,7 +197,14 @@
                             ${this.getFilesHTML(client)}
                             ${client.facebook || client.instagram || client.linkedin || client.website ? `
                                 <div class="info-item full-width">
-                                    <div class="info-label">🌐 Social Media & Website</div>
+                                    <div class="info-label" style="display: flex; align-items: center; gap: 6px;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <circle cx="12" cy="12" r="10"></circle>
+                                            <line x1="2" y1="12" x2="22" y2="12"></line>
+                                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                                        </svg>
+                                        Social Media & Website
+                                    </div>
                                     <div class="info-value" style="display: flex; flex-direction: column; gap: 8px;">
                                         ${client.facebook ? `
                                             <div>
@@ -148,41 +235,48 @@
                             ` : ''}
                         </div>
                         ${client.desc ? `
-                            <div style="margin-top: 20px; padding: 16px; background: var(--background); border-radius: 10px; border: 1px solid var(--border);">
-                                <div class="info-label" style="margin: 0 0 12px 0;">📝 Notes</div>
+                            <div style="margin-top: 10px; padding: 10px; background: var(--background); border-radius: 6px; border: 1px solid var(--border);">
+                                <div class="info-label" style="margin: 0 0 6px 0;">Notes</div>
                                 <div class="client-notes-content">
                                     ${client.desc}
                                 </div>
                             </div>
                         ` : ''}
+                        </div>
                     </div>
 
                     <!-- History & Statistics Section -->
                     <div class="client-history-section">
-                        <h3>📊 History & Statistics</h3>
+                        <h3>History & Statistics</h3>
 
                         <!-- Top Row: Appointments and Tasks side by side -->
                         <div class="stats-grid-row">
                             <div class="stat-item clickable" id="btn-view-appointments">
-                                <div class="stat-number">${appointments.length}</div>
-                                <div class="stat-label">📅 Appointments</div>
-                                <div class="stat-detail">${completedAppointments} completed</div>
+                                <div class="stat-label">Appointments</div>
+                                <div class="stat-detail">Total: ${appointments.length}</div>
+                                <div class="stat-detail">Completed: ${completedAppointments}</div>
                             </div>
                             <div class="stat-item clickable" id="btn-view-tasks">
-                                <div class="stat-number">${tasks.length}</div>
-                                <div class="stat-label">✓ Tasks</div>
-                                <div class="stat-detail">${completedTasks} completed</div>
+                                <div class="stat-label">Tasks</div>
+                                <div class="stat-detail">Total: ${tasks.length}</div>
+                                <div class="stat-detail">Completed: ${completedTasks}</div>
                             </div>
                         </div>
 
                         <!-- Interactions Preview Section -->
                         <div class="interactions-preview-section">
-                            <div class="interactions-header">
-                                <h4>🤝 Recent Interactions</h4>
-                                <button class="btn-add-interaction" id="btn-add-interaction" title="Προσθήκη Interaction">
+                            <div class="interactions-header collapsible-header" data-target="interactions-preview-content" style="cursor: pointer;">
+                                <h4 style="display: flex; align-items: center; gap: 8px;">
+                                    Recent Interactions
+                                    <svg class="chevron-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition: transform 0.2s;">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </h4>
+                                <button class="btn-add-interaction" id="btn-add-interaction" title="Προσθήκη Interaction" onclick="event.stopPropagation();">
                                     <span>+</span>
                                 </button>
                             </div>
+                            <div class="collapsible-content" id="interactions-preview-content" style="overflow: hidden; transition: max-height 0.3s ease;">
                             <div class="interactions-preview" id="interactions-preview">
                                 ${interactions.length === 0 ? `
                                     <div class="interactions-empty">
@@ -190,8 +284,7 @@
                                     </div>
                                 ` : recentInteractions.map(interaction => `
                                     <div class="interaction-preview-item">
-                                        <div class="interaction-icon">${interaction.type === 'checkin' ? '📍' : '📞'}</div>
-                                        <div class="interaction-content">
+                                        <div class="interaction-content" style="flex: 1;">
                                             <div class="interaction-type">${interaction.type === 'checkin' ? 'Check-in' : 'Follow-up'}</div>
                                             <div class="interaction-date">${this.formatDateTime(interaction.date)}</div>
                                             ${interaction.notes ? `<div class="interaction-notes">${this.escapeHtml(interaction.notes).substring(0, 50)}${interaction.notes.length > 50 ? '...' : ''}</div>` : ''}
@@ -204,12 +297,19 @@
                                     View All ${interactions.length} Interaction${interactions.length > 1 ? 's' : ''} →
                                 </button>
                             ` : ''}
+                            </div>
                         </div>
 
-                        <!-- Total Revenue -->
-                        <div class="stat-item-full">
-                            <div class="stat-number">${currency}${totalMoney.toFixed(2)}</div>
-                            <div class="stat-label">💰 Total Revenue</div>
+                        <!-- Total Revenue & Profit -->
+                        <div class="stats-grid-row">
+                            <div class="stat-item">
+                                <div class="stat-number">${currency}${totalMoney.revenue.toFixed(2)}</div>
+                                <div class="stat-label">Τζίρος</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number" style="color: var(--success);">${currency}${totalMoney.profit.toFixed(2)}</div>
+                                <div class="stat-label">Κέρδος</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -259,6 +359,9 @@
 
             // Bind action buttons
             this.bindActionButtons(modal, client);
+
+            // Bind collapsible sections
+            this.bindCollapsibleSections(modal);
         },
 
         /**
@@ -287,11 +390,18 @@
 
                     historyHtml += `
                         <div class="history-item ${statusClass}" data-type="appointment" data-id="${item.id}">
-                            <div class="history-icon">📅</div>
+                            <div class="history-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </div>
                             <div class="history-content">
                                 <div class="history-title">
                                     <span class="history-type">Appointment</span>
-                                    ${item.completed ? '<span class="history-badge completed">✓ Completed</span>' : ''}
+                                    ${item.completed ? '<span class="history-badge completed" style="display: inline-flex; align-items: center; gap: 4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Completed</span>' : ''}
                                 </div>
                                 ${item.desc ? `<div class="history-desc">${this.stripHtml(item.desc).substring(0, 100)}</div>` : ''}
                                 <div class="history-meta">
@@ -372,11 +482,16 @@
 
                     historyHtml += `
                         <div class="history-item ${statusClass}" data-type="task" data-id="${item.id}">
-                            <div class="history-icon">✓</div>
+                            <div class="history-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 11l3 3L22 4"></path>
+                                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                                </svg>
+                            </div>
                             <div class="history-content">
                                 <div class="history-title">
                                     <span class="history-type">Task</span>
-                                    ${item.completed ? '<span class="history-badge completed">✓ Completed</span>' : ''}
+                                    ${item.completed ? '<span class="history-badge completed" style="display: inline-flex; align-items: center; gap: 4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Completed</span>' : ''}
                                 </div>
                                 ${item.desc ? `<div class="history-desc">${this.stripHtml(item.desc).substring(0, 100)}</div>` : ''}
                                 <div class="history-meta">
@@ -453,7 +568,11 @@
 
                     // Show status badge if completed
                     const statusBadge = interaction.status === 'completed'
-                        ? `<span style="background: #4CAF50; color: white; padding: 2px 6px; border-radius: 8px; font-size: 11px; margin-left: 8px;">✅ Ολοκληρωμένο</span>`
+                        ? `<span style="background: #4CAF50; color: white; padding: 2px 6px; border-radius: 8px; font-size: 11px; margin-left: 8px; display: inline-flex; align-items: center; gap: 4px;">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Ολοκληρωμένο</span>`
                         : '';
 
                     // Show notification count if interaction has notifications
@@ -464,7 +583,11 @@
                     // Complete/Uncomplete button
                     const statusClass = interaction.status === 'completed' ? 'completed' : 'pending';
                     const completeBtn = (!interaction.status || interaction.status === 'pending')
-                        ? `<button class="btn-complete-interaction" data-interaction-id="${interaction.id}" style="padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;" title="Mark as completed">✅</button>`
+                        ? `<button class="btn-complete-interaction" data-interaction-id="${interaction.id}" style="padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;" title="Mark as completed">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </button>`
                         : `<button class="btn-uncomplete-interaction" data-interaction-id="${interaction.id}" style="padding: 8px; background: #FF9800; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;" title="Mark as pending">⏳</button>`;
 
                     historyHtml += `
@@ -813,7 +936,7 @@
                     </div>
                     <button type="button" id="manage-interaction-notifications-btn"
                             style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
-                        <span>${interaction && interaction.id ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                        <span>${interaction && interaction.id ? 'Επεξεργασία' : 'Προσθήκη'}</span>
                     </button>
                 </div>
                 ${summaryHtml}
@@ -851,7 +974,7 @@
                             </div>
                             <button type="button" id="manage-interaction-notifications-btn"
                                     style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
-                                <span>${interaction && interaction.id ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                                <span>${interaction && interaction.id ? 'Επεξεργασία' : 'Προσθήκη'}</span>
                             </button>
                         `;
 
@@ -1068,7 +1191,9 @@
                 historyHtml += '<div class="history-empty">No history yet</div>';
             } else {
                 history.forEach(item => {
-                    const icon = item.type === 'appointment' ? '📅' : '✓';
+                    const icon = item.type === 'appointment'
+                        ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`
+                        : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>`;
                     const typeLabel = item.type === 'appointment' ? 'Appointment' : 'Task';
                     const statusClass = item.completed ? 'completed' : 'pending';
                     const date = item.date ? this.formatDateTime(item.date) : 'Χωρίς ημερομηνία';
@@ -1080,7 +1205,7 @@
                             <div class="history-content">
                                 <div class="history-title">
                                     <span class="history-type">${typeLabel}</span>
-                                    ${item.completed ? '<span class="history-badge completed">✓ Completed</span>' : ''}
+                                    ${item.completed ? '<span class="history-badge completed" style="display: inline-flex; align-items: center; gap: 4px;"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Completed</span>' : ''}
                                 </div>
                                 ${item.desc ? `<div class="history-desc">${this.stripHtml(item.desc).substring(0, 100)}</div>` : ''}
                                 <div class="history-meta">
@@ -1153,7 +1278,12 @@
             // Maps
             const btnMaps = modal.querySelector('#btn-maps');
             btnMaps?.addEventListener('click', () => {
-                if (client.lat && client.lng) {
+                // Check for coordinates in both old and new formats
+                const hasOldFormatCoords = client.lat && client.lng;
+                const hasNewFormatCoords = client.addresses?.some(addr => addr.type === 'map' && addr.lat && addr.lng);
+                const hasCoords = hasOldFormatCoords || hasNewFormatCoords;
+
+                if (hasCoords) {
                     // Close this modal and show client on internal map page
                     window.SmartAgenda.UIComponents.closeModal(modal);
 
@@ -1168,7 +1298,7 @@
                             }
                         }, 300);
                     }
-                } else if (client.address) {
+                } else if (client.address || client.addresses?.some(addr => addr.value)) {
                     window.SmartAgenda.Toast.warning('Client has address but no coordinates. Please update location.');
                 } else {
                     window.SmartAgenda.Toast.error('No location available for this client');
@@ -1184,6 +1314,12 @@
                 } else {
                     window.SmartAgenda.Toast.error('No phone number for this client');
                 }
+            });
+
+            // Share Client
+            const btnShare = modal.querySelector('#btn-share-client');
+            btnShare?.addEventListener('click', () => {
+                this.shareClientData(client);
             });
 
             // View Appointments History
@@ -1211,6 +1347,38 @@
             });
         },
 
+        /**
+         * Bind collapsible section functionality
+         */
+        bindCollapsibleSections: function(modal) {
+            const headers = modal.querySelectorAll('.collapsible-header');
+
+            headers.forEach(header => {
+                const targetId = header.dataset.target;
+                const content = modal.querySelector(`#${targetId}`);
+                const chevron = header.querySelector('.chevron-icon');
+
+                if (!content) return;
+
+                // Set initial state - expanded by default
+                content.style.maxHeight = content.scrollHeight + 'px';
+
+                header.addEventListener('click', () => {
+                    const isCollapsed = content.style.maxHeight === '0px';
+
+                    if (isCollapsed) {
+                        // Expand
+                        content.style.maxHeight = content.scrollHeight + 'px';
+                        if (chevron) chevron.style.transform = 'rotate(0deg)';
+                    } else {
+                        // Collapse
+                        content.style.maxHeight = '0px';
+                        if (chevron) chevron.style.transform = 'rotate(-90deg)';
+                    }
+                });
+            });
+        },
+
         getClientAppointments: function(clientId) {
             const appointments = window.SmartAgenda.DataManager.getAll('appointments');
             return appointments.filter(a => a.client == clientId);
@@ -1229,14 +1397,28 @@
         },
 
         calculateTotalMoney: function(appointments, tasks) {
-            let total = 0;
+            let revenue = 0;  // Τζίρος - always amount
+            let profit = 0;   // Κέρδος - profit if exists, otherwise amount
+
             appointments.forEach(a => {
-                if (a.amount) total += parseFloat(a.amount);
+                if (a.amount) {
+                    revenue += parseFloat(a.amount);
+                    // Use profit if exists, otherwise use amount
+                    const itemProfit = a.profit ? parseFloat(a.profit) : parseFloat(a.amount);
+                    profit += itemProfit;
+                }
             });
+
             tasks.forEach(t => {
-                if (t.amount) total += parseFloat(t.amount);
+                if (t.amount) {
+                    revenue += parseFloat(t.amount);
+                    // Use profit if exists, otherwise use amount
+                    const itemProfit = t.profit ? parseFloat(t.profit) : parseFloat(t.amount);
+                    profit += itemProfit;
+                }
             });
-            return total;
+
+            return { revenue, profit };
         },
 
         formatDateTime: function(dateString) {
@@ -1318,7 +1500,7 @@
 
             let html = `
                 <div class="info-item full-width">
-                    <div class="info-label">📍 Addresses</div>
+                    <div class="info-label">Addresses</div>
                     <div class="info-value" style="display: flex; flex-direction: column; gap: 12px;">
             `;
 
@@ -1495,6 +1677,80 @@
             }
         },
 
+        shareClientData: async function(client) {
+            try {
+                // Get all client related data
+                const appointments = this.getClientAppointments(client.id);
+                const tasks = this.getClientTasks(client.id);
+                const interactions = this.getClientInteractions(client.id);
+
+                // Create comprehensive client data object
+                const clientData = {
+                    exportDate: new Date().toISOString(),
+                    exportedBy: 'Smart Agenda',
+                    client: {
+                        ...client,
+                        // Remove photo data to reduce file size
+                        photo: client.photo ? '[Photo data removed for export]' : null
+                    },
+                    appointments: appointments || [],
+                    tasks: tasks || [],
+                    interactions: interactions || [],
+                    summary: {
+                        totalAppointments: appointments?.length || 0,
+                        totalTasks: tasks?.length || 0,
+                        totalInteractions: interactions?.length || 0,
+                        totalRevenue: this.calculateTotalMoney(appointments, tasks)
+                    }
+                };
+
+                // Convert to JSON string with formatting
+                const jsonString = JSON.stringify(clientData, null, 2);
+                const fileName = `${client.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.json`;
+
+                // Check if running on native platform
+                const isMobile = window.Capacitor?.isNativePlatform();
+
+                if (isMobile && window.Capacitor?.Plugins?.Filesystem && window.Capacitor?.Plugins?.Share) {
+                    // Mobile: Save to filesystem and share
+                    const Filesystem = window.Capacitor.Plugins.Filesystem;
+                    const Share = window.Capacitor.Plugins.Share;
+
+                    // Write file to cache directory
+                    const writeResult = await Filesystem.writeFile({
+                        path: fileName,
+                        data: jsonString,
+                        directory: 'CACHE',
+                        encoding: 'utf8'
+                    });
+
+                    // Share the file
+                    await Share.share({
+                        title: `Share ${client.name} Data`,
+                        text: `Client data for ${client.name}`,
+                        url: writeResult.uri,
+                        dialogTitle: 'Share Client Data'
+                    });
+
+                    window.SmartAgenda.Toast.success('Client data shared successfully');
+                } else {
+                    // Web/Desktop: Download as file
+                    const blob = new Blob([jsonString], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = fileName;
+                    link.click();
+                    URL.revokeObjectURL(url);
+
+                    window.SmartAgenda.Toast.success('Client data downloaded successfully');
+                }
+            } catch (error) {
+                console.error('Error sharing client data:', error);
+                window.SmartAgenda.Toast.error('Failed to share client data: ' + error.message);
+            }
+        },
+
         escapeHtml: function(text) {
             const div = document.createElement('div');
             div.textContent = text;
@@ -1512,15 +1768,15 @@
         .client-actions {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 12px;
-            margin-bottom: 24px;
+            gap: 8px;
+            margin-bottom: 12px;
             padding: 0;
         }
 
         .action-btn {
-            padding: 16px 12px;
+            padding: 10px 8px;
             border: 2px solid var(--border);
-            border-radius: 12px;
+            border-radius: 8px;
             background: var(--surface);
             color: var(--text-primary);
             cursor: pointer;
@@ -1577,35 +1833,35 @@
         .client-info-section, .client-history-section {
             background: linear-gradient(to bottom, var(--surface), var(--background));
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 24px;
-            margin-bottom: 20px;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
 
         .client-info-section h3, .client-history-section h3 {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             color: var(--text-primary);
-            padding-bottom: 12px;
+            padding-bottom: 8px;
             border-bottom: 2px solid var(--border);
         }
 
         .info-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
+            gap: 10px;
+            margin-top: 10px;
         }
 
         .info-item {
             display: flex;
             flex-direction: column;
-            gap: 8px;
-            padding: 16px;
+            gap: 4px;
+            padding: 8px;
             background: var(--background);
-            border-radius: 10px;
+            border-radius: 6px;
             border: 1px solid var(--border);
             transition: all 0.2s;
         }
@@ -1679,9 +1935,9 @@
 
         .stat-item {
             text-align: center;
-            padding: 24px 16px;
+            padding: 12px 8px;
             background: linear-gradient(135deg, var(--surface), var(--background));
-            border-radius: 16px;
+            border-radius: 8px;
             border: 2px solid var(--border);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1712,13 +1968,13 @@
         }
 
         .stat-number {
-            font-size: 32px;
+            font-size: 24px;
             font-weight: 800;
             background: linear-gradient(135deg, var(--primary-color), var(--success));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             line-height: 1;
         }
 
@@ -1913,20 +2169,20 @@
 
         .stat-item-full {
             text-align: center;
-            padding: 24px 16px;
+            padding: 12px 8px;
             background: linear-gradient(135deg, var(--surface), var(--background));
-            border-radius: 16px;
+            border-radius: 8px;
             border: 2px solid var(--border);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-            margin-top: 20px;
+            margin-top: 10px;
         }
 
         .interactions-preview-section {
             background: var(--surface);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 20px;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 12px;
         }
 
         .interactions-header {

@@ -17,6 +17,56 @@
         init: function() {
             this.modalContainer = document.getElementById('modal-container');
             this.initGreekTextInputFix();
+            this.initBackButtonHandler();
+        },
+
+        /**
+         * Initialize hardware back button handler (Android)
+         */
+        initBackButtonHandler: function() {
+            // Check if Capacitor App plugin is available
+            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+                const { App } = window.Capacitor.Plugins;
+
+                App.addListener('backButton', (event) => {
+                    // Check if there are any open modals
+                    const openModals = this.modalContainer.querySelectorAll('.modal-overlay.active');
+
+                    if (openModals.length > 0) {
+                        // Close the topmost modal
+                        const lastModal = openModals[openModals.length - 1];
+                        this.closeModal(lastModal);
+                        return; // Prevent default back behavior
+                    }
+
+                    // Check if hamburger menu is open
+                    const navMenu = document.getElementById('nav-menu');
+                    if (navMenu && navMenu.classList.contains('open')) {
+                        // Close the menu
+                        if (window.SmartAgenda && window.SmartAgenda.Navigation) {
+                            window.SmartAgenda.Navigation.closeMenu();
+                        }
+                        return; // Prevent default back behavior
+                    }
+
+                    // Check if we're in a settings category view (not main settings menu)
+                    if (window.SmartAgenda && window.SmartAgenda.Settings && window.SmartAgenda.Settings.currentCategory) {
+                        // Go back to main settings menu
+                        window.SmartAgenda.Settings.goBackToMainMenu();
+                        return; // Prevent default back behavior
+                    }
+
+                    // No modals or menus open, allow default back behavior
+                    // (navigate back or exit app)
+                    if (event.canGoBack) {
+                        window.history.back();
+                    } else {
+                        App.exitApp();
+                    }
+                });
+
+                console.log('✅ Back button handler initialized');
+            }
         },
 
         /**
@@ -45,7 +95,8 @@
                 buttons = [],
                 size = 'medium', // small, medium, large
                 closeOnOverlay = true,
-                hideCloseButton = false
+                hideCloseButton = false,
+                hideHeader = false
             } = options;
 
             // Create modal structure
@@ -53,20 +104,24 @@
             modal.className = 'modal-overlay';
             modal.innerHTML = `
                 <div class="modal-dialog modal-${size}">
-                    <div class="modal-header">
-                        <h3 class="modal-title">${title}</h3>
-                        ${hideCloseButton ? '' : '<button class="modal-close" aria-label="Close">×</button>'}
-                    </div>
+                    ${hideHeader ? '' : `
+                        <div class="modal-header">
+                            <h3 class="modal-title">${title}</h3>
+                            ${hideCloseButton ? '' : '<button class="modal-close" aria-label="Close">×</button>'}
+                        </div>
+                    `}
                     <div class="modal-body">
                         ${content}
                     </div>
-                    <div class="modal-footer">
-                        ${buttons.map(btn => `
-                            <button class="btn-${btn.type || 'secondary'}" data-action="${btn.action}">
-                                ${btn.label}
-                            </button>
-                        `).join('')}
-                    </div>
+                    ${buttons.length > 0 ? `
+                        <div class="modal-footer">
+                            ${buttons.map(btn => `
+                                <button class="btn-${btn.type || 'secondary'}" data-action="${btn.action}" ${btn.icon ? 'style="min-width: auto; padding: 8px 12px;"' : ''}>
+                                    ${btn.icon || btn.label}
+                                </button>
+                            `).join('')}
+                        </div>
+                    ` : ''}
                 </div>
             `;
 
@@ -104,6 +159,103 @@
             setTimeout(() => modal.classList.add('active'), 10);
 
             return modal;
+        },
+
+        /**
+         * Show progress modal
+         * @param {string} title - Modal title
+         * @returns {Object} Modal controller with update and close methods
+         */
+        showProgressModal: function(title = 'Processing...') {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-small">
+                    <div class="modal-header">
+                        <h3 class="modal-title">${title}</h3>
+                    </div>
+                    <div class="modal-body" style="padding: 24px;">
+                        <div class="progress-message" style="text-align: center; margin-bottom: 16px; font-size: 14px; color: var(--text-secondary); min-height: 20px;">
+                            Ξεκινάει...
+                        </div>
+                        <div class="progress-bar-container" style="width: 100%; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+                            <div class="progress-bar-fill" style="width: 0%; height: 100%; background: var(--primary-color); transition: width 0.3s ease; position: relative; overflow: hidden;"></div>
+                        </div>
+                        <style>
+                        @keyframes progress-pulse {
+                            0%, 100% { opacity: 1; }
+                            50% { opacity: 0.7; }
+                        }
+                        .progress-pulsing {
+                            animation: progress-pulse 2s ease-in-out infinite;
+                        }
+                        .progress-pulsing::after {
+                            content: '';
+                            position: absolute;
+                            top: 0;
+                            right: 0;
+                            bottom: 0;
+                            left: 0;
+                            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+                            animation: progress-shimmer 2s linear infinite;
+                        }
+                        @keyframes progress-shimmer {
+                            0% { transform: translateX(-100%); }
+                            100% { transform: translateX(100%); }
+                        }
+                        </style>
+                        <div class="progress-percent" style="text-align: center; font-size: 13px; font-weight: 600; color: var(--primary-color);">
+                            0%
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Add to container
+            this.modalContainer.appendChild(modal);
+
+            // Prevent background scrolling
+            document.body.style.overflow = 'hidden';
+
+            // Show modal with animation
+            setTimeout(() => modal.classList.add('active'), 10);
+
+            // Return controller
+            return {
+                element: modal,
+                update: function(percent, message, options = {}) {
+                    const progressFill = modal.querySelector('.progress-bar-fill');
+                    const progressPercent = modal.querySelector('.progress-percent');
+                    const progressMessage = modal.querySelector('.progress-message');
+
+                    if (progressFill) {
+                        progressFill.style.width = percent + '%';
+
+                        // Add pulsing animation for simulated progress
+                        if (options.pulsing) {
+                            progressFill.classList.add('progress-pulsing');
+                        } else {
+                            progressFill.classList.remove('progress-pulsing');
+                        }
+                    }
+                    if (progressPercent) {
+                        progressPercent.textContent = percent + '%';
+                    }
+                    if (progressMessage && message) {
+                        progressMessage.textContent = message;
+                    }
+                },
+                close: function() {
+                    modal.classList.remove('active');
+                    setTimeout(() => {
+                        modal.remove();
+                        // Re-enable background scrolling only if no other modals are open
+                        if (window.SmartAgenda.UIComponents.modalContainer.querySelectorAll('.modal-overlay').length === 0) {
+                            document.body.style.overflow = '';
+                        }
+                    }, 300);
+                }
+            };
         },
 
         /**
@@ -183,9 +335,36 @@
             const form = document.createElement('form');
             form.className = 'modal-form';
 
-            fields.forEach(field => {
+            // Track if we need to create a row for inline fields
+            let currentRow = null;
+
+            fields.forEach((field, index) => {
                 const formGroup = document.createElement('div');
                 formGroup.className = 'form-group';
+
+                // Support for inline fields (width property)
+                if (field.width) {
+                    formGroup.style.width = field.width;
+                    formGroup.style.flex = '0 0 auto';
+                    formGroup.style.minWidth = '0';
+
+                    // Create a row container if:
+                    // 1. This is the first inline field or previous wasn't inline
+                    // 2. OR this field explicitly requests a new row
+                    const prevField = fields[index - 1];
+                    if (!currentRow || !prevField || !prevField.width || field.newRow) {
+                        currentRow = document.createElement('div');
+                        currentRow.className = 'form-row';
+                        currentRow.style.display = 'flex';
+                        currentRow.style.gap = '12px';
+                        currentRow.style.marginBottom = '16px';
+                        currentRow.style.flexWrap = 'nowrap';
+                        form.appendChild(currentRow);
+                    }
+                } else {
+                    // Not an inline field, reset current row
+                    currentRow = null;
+                }
 
                 // Label
                 if (field.label) {
@@ -201,6 +380,27 @@
                 // Input
                 let input;
                 switch (field.type) {
+                    case 'note':
+                        // For note type, just add the text without input field
+                        const note = document.createElement('div');
+                        note.className = 'form-note';
+                        note.style.fontSize = '12px';
+                        note.style.color = 'var(--text-secondary)';
+                        note.style.marginTop = '8px';
+                        note.style.fontStyle = 'italic';
+                        note.textContent = field.text || '';
+                        formGroup.innerHTML = '';
+                        formGroup.appendChild(note);
+                        formGroup.style.marginBottom = '8px';
+
+                        // Append and continue to next field
+                        if (currentRow && field.width) {
+                            currentRow.appendChild(formGroup);
+                        } else {
+                            form.appendChild(formGroup);
+                        }
+                        input = null; // Set to null so we skip further processing
+                        break;
                     case 'textarea':
                         input = document.createElement('textarea');
                         input.rows = field.rows || 4;
@@ -239,6 +439,11 @@
                     default:
                         input = document.createElement('input');
                         input.type = field.type || 'text';
+                }
+
+                // Skip further processing if input is null (e.g., for 'note' type)
+                if (!input) {
+                    return;
                 }
 
                 input.name = field.name;
@@ -286,7 +491,13 @@
                 if (field.type !== 'checkbox') {
                     formGroup.appendChild(input);
                 }
-                form.appendChild(formGroup);
+
+                // Append formGroup to either current row or form
+                if (currentRow && field.width) {
+                    currentRow.appendChild(formGroup);
+                } else {
+                    form.appendChild(formGroup);
+                }
             });
 
             // Return form and helper function
@@ -574,6 +785,7 @@
             height: 100%;
             background: rgba(0, 0, 0, 0.5);
             backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
             display: flex;
             align-items: center;
             justify-content: center;

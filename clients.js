@@ -140,7 +140,12 @@
                     color: var(--text-secondary);
                 `;
                 searchPrompt.innerHTML = `
-                    <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
+                    <div style="font-size: 48px; margin-bottom: 16px;">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                    </div>
                     <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary);">Search for Clients</div>
                     <div style="font-size: 14px;">Enter a name or phone number and click search to find clients</div>
                 `;
@@ -276,7 +281,7 @@
 
         createClientCard: function(client) {
             const card = document.createElement('div');
-            card.className = 'contact-item';
+            card.className = 'contact-item modern-client-card';
             card.dataset.id = client.id;
 
             // Get first letter for avatar
@@ -286,30 +291,98 @@
             const primaryType = this.getPrimaryClientType(client);
             const avatarColor = primaryType ? primaryType.color : '#94a3b8';
 
-            // Details text - show phone or email or address
-            let details = '';
-            if (client.phone) {
-                details = client.phone;
-            } else if (client.email) {
-                details = client.email;
-            } else if (client.address) {
-                details = client.address;
+            // Get all client types
+            const availableTypes = window.SmartAgenda?.Settings?.getClientTypes() || [];
+            let clientTypesList = [];
+            if (client.clientTypes && Array.isArray(client.clientTypes)) {
+                clientTypesList = client.clientTypes;
+            } else if (client.customerType) {
+                clientTypesList = [client.customerType];
             }
 
-            // Build contact name display
-            let contactNameDisplay = '';
+            // Build type badges (max 3)
+            const typeBadges = clientTypesList.slice(0, 3).map(typeId => {
+                const type = availableTypes.find(t => t.id === typeId);
+                if (!type) return '';
+                return `<span style="background: ${type.color}18; color: ${type.color}; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">${this.escapeHtml(type.name)}</span>`;
+            }).join('');
+
+            // Build contact details with icons
+            const detailsHTML = [];
+
             if (client.contactName) {
-                contactNameDisplay = `<div class="contact-person" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">👤 ${this.escapeHtml(client.contactName)}</div>`;
+                detailsHTML.push(`
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary);">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        <span>${this.escapeHtml(client.contactName)}</span>
+                    </div>
+                `);
+            }
+
+            if (client.phone) {
+                detailsHTML.push(`
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary);">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                        </svg>
+                        <span>${this.escapeHtml(client.phone)}</span>
+                    </div>
+                `);
+            }
+
+            if (client.email) {
+                detailsHTML.push(`
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary);">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                        </svg>
+                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(client.email)}</span>
+                    </div>
+                `);
+            }
+
+            if (client.address) {
+                detailsHTML.push(`
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary);">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                            <circle cx="12" cy="10" r="3"></circle>
+                        </svg>
+                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(client.address)}</span>
+                    </div>
+                `);
             }
 
             card.innerHTML = `
-                <div class="contact-avatar" style="background: ${avatarColor}; color: white;">${initial}</div>
-                <div class="contact-info">
-                    <div class="contact-name">${this.escapeHtml(client.name)}</div>
-                    ${contactNameDisplay}
-                    ${details ? `<div class="contact-details">${this.escapeHtml(details)}</div>` : ''}
+                <div style="display: flex; align-items: center; gap: 12px; width: 100%;">
+                    <div style="width: 48px; height: 48px; border-radius: 12px; background: ${avatarColor}; color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 600; flex-shrink: 0;">
+                        ${initial}
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 15px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: ${typeBadges ? '6px' : '4px'};">
+                            ${this.escapeHtml(client.name)}
+                        </div>
+                        ${typeBadges ? `
+                            <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">
+                                ${typeBadges}
+                            </div>
+                        ` : ''}
+                        ${detailsHTML.length > 0 ? `
+                            <div style="display: flex; flex-direction: column; gap: 3px;">
+                                ${detailsHTML.slice(0, 2).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div style="flex-shrink: 0;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </div>
                 </div>
-                ${primaryType ? `<span class="contact-type-badge" style="background: ${primaryType.color}22; color: ${primaryType.color}; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">${this.escapeHtml(primaryType.name.substring(0, 3))}</span>` : ''}
             `;
 
             // Click handler - Show detailed client view instead of edit modal
@@ -475,7 +548,13 @@
             // Add delete button for existing clients
             if (isEdit) {
                 buttons.unshift({
-                    label: i18n.translate('actions.delete'),
+                    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18"></path>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>`,
                     type: 'danger',
                     action: 'delete',
                     onClick: (modal) => this.deleteClient(modal, client.id)
@@ -657,6 +736,13 @@
             // Insert before address field's form group
             formGroup.parentNode.insertBefore(typesContainer, formGroup);
 
+            // Initialize global temp storage for client types
+            if (!window.SmartAgenda.tempClientData) {
+                window.SmartAgenda.tempClientData = {};
+            }
+            window.SmartAgenda.tempClientData.clientTypes = selectedTypes;
+            window.SmartAgenda.tempClientData.primaryType = primaryTypeId;
+
             // Bind click events
             const typeOptions = modal.querySelectorAll('.type-option');
             typeOptions.forEach(option => {
@@ -682,6 +768,10 @@
                         star.textContent = '☆';
                         star.style.opacity = '0.3';
                     }
+
+                    // Backup current selection state
+                    const currentSelected = Array.from(modal.querySelectorAll('.type-option.selected')).map(opt => opt.dataset.typeId);
+                    window.SmartAgenda.tempClientData.clientTypes = currentSelected;
                 });
 
                 // Click on star to set as primary
@@ -704,6 +794,9 @@
                     // Set this as primary
                     star.textContent = '⭐';
                     star.style.opacity = '1';
+
+                    // Backup primary type
+                    window.SmartAgenda.tempClientData.primaryType = typeId;
                 });
             });
         },
@@ -726,10 +819,9 @@
                     <div style="flex: 1;">
                         <input type="file" id="client-photo-input" accept="image/*" style="display: none;">
                         <button type="button" class="btn-secondary" id="upload-photo-btn" style="margin-bottom: 8px; width: 100%;">
-                            <span>📷</span>
                             <span>Choose Photo</span>
                         </button>
-                        ${client?.photo ? '<button type="button" class="btn-danger" id="remove-photo-btn" style="width: 100%;"><span>🗑️</span><span>Remove Photo</span></button>' : ''}
+                        ${client?.photo ? '<button type="button" class="btn-danger" id="remove-photo-btn" style="width: 100%;"><span>Remove Photo</span></button>' : ''}
                     </div>
                 </div>
             `;
@@ -752,9 +844,34 @@
 
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    const preview = document.getElementById('client-photo-preview');
-                    preview.innerHTML = `<img src="${event.target.result}" style="width: 100%; height: 100%; object-fit: cover;">`;
-                    preview.dataset.photo = event.target.result;
+                    // Use querySelector on modal to ensure we get the right element
+                    const currentModal = document.querySelector('.modal-overlay:not([style*="display: none"]) .modal');
+                    if (!currentModal) {
+                        console.error('Modal not found when trying to set photo');
+                        return;
+                    }
+
+                    const preview = currentModal.querySelector('#client-photo-preview');
+                    if (!preview) {
+                        console.error('Photo preview element not found');
+                        return;
+                    }
+
+                    const photoData = event.target.result;
+                    preview.innerHTML = `<img src="${photoData}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                    preview.dataset.photo = photoData;
+
+                    // Store in a global variable as backup
+                    if (!window.SmartAgenda.tempClientData) {
+                        window.SmartAgenda.tempClientData = {};
+                    }
+                    window.SmartAgenda.tempClientData.photo = photoData;
+
+                    console.log('Photo uploaded and stored successfully');
+                };
+                reader.onerror = (error) => {
+                    console.error('Error reading file:', error);
+                    window.SmartAgenda.Toast.error('Failed to read photo file');
                 };
                 reader.readAsDataURL(file);
             });
@@ -764,6 +881,11 @@
                 preview.innerHTML = '<span style="font-size: 40px;">👤</span>';
                 preview.dataset.photo = '';
                 document.getElementById('client-photo-input').value = '';
+
+                // Clear global backup
+                if (window.SmartAgenda.tempClientData) {
+                    delete window.SmartAgenda.tempClientData.photo;
+                }
             });
         },
 
@@ -1010,20 +1132,19 @@
             // Create location picker modal
             const pickerContent = `
                 <div class="location-picker-container" style="height: 500px; display: flex; flex-direction: column;">
-                    <div class="location-picker-controls" style="padding: 12px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; gap: 8px;">
+                    <div class="location-picker-controls" style="padding: 6px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; gap: 6px;">
                         <input type="text" id="location-search-input" placeholder="Search for a location..."
-                               style="flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--border-radius-sm); background: var(--background); color: var(--text-primary);">
-                        <button type="button" id="location-search-btn" class="btn-primary" style="padding: 8px 16px;">
-                            <span>🔍</span>
-                        </button>
-                        <button type="button" id="location-gps-btn" class="btn-secondary" style="padding: 8px 16px;">
-                            <span>📍</span>
+                               style="flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--border-radius-sm); background: var(--background); color: var(--text-primary);">
+                        <button type="button" id="location-search-btn" class="btn-primary" style="padding: 6px 12px;">
+                            <span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <path d="m21 21-4.35-4.35"></path>
+                                </svg>
+                            </span>
                         </button>
                     </div>
                     <div id="location-map" style="flex: 1; background: #e0e0e0;"></div>
-                    <div id="selected-location-info" style="padding: 12px; background: var(--surface); border-top: 1px solid var(--border); min-height: 50px; color: var(--text-secondary);">
-                        Click on the map to select a location
-                    </div>
                 </div>
             `;
 
@@ -1031,6 +1152,33 @@
                 title: 'Pick Location from Map',
                 content: pickerContent,
                 buttons: [
+                    {
+                        label: 'GPS',
+                        type: 'secondary',
+                        action: 'gps',
+                        id: 'location-gps-btn',
+                        onClick: (modal) => {
+                            if (navigator.geolocation) {
+                                window.SmartAgenda.Toast.info('Getting your location...');
+                                navigator.geolocation.getCurrentPosition(
+                                    (position) => {
+                                        const pos = {
+                                            lat: position.coords.latitude,
+                                            lng: position.coords.longitude
+                                        };
+                                        this.pickerMap.setCenter(pos);
+                                        this.pickerMap.setZoom(16);
+                                        this.selectLocationOnMap(new google.maps.LatLng(pos.lat, pos.lng));
+                                    },
+                                    () => {
+                                        window.SmartAgenda.Toast.error('Could not get your location');
+                                    }
+                                );
+                            } else {
+                                window.SmartAgenda.Toast.error('Geolocation not supported');
+                            }
+                        }
+                    },
                     {
                         label: 'Cancel',
                         type: 'secondary',
@@ -1062,14 +1210,19 @@
             const mapElement = modal.querySelector('#location-map');
             if (!mapElement || !window.google) return;
 
-            // Create map
+            // Create map with Map ID for modern features
             const initialCenter = { lat: 37.9838, lng: 23.7275 }; // Default to Athens
+            const MAP_ID = 'de8670acc4bd10699eb9ccb1'; // Same as main map
+
             this.pickerMap = new google.maps.Map(mapElement, {
+                mapId: MAP_ID, // Enable Advanced Markers and modern features
                 center: initialCenter,
                 zoom: 13,
                 mapTypeControl: true,
                 streetViewControl: false,
-                gestureHandling: 'greedy' // Allow 1-finger panning, 2-finger zooming
+                fullscreenControl: false,
+                gestureHandling: 'greedy', // Allow 1-finger panning, 2-finger zooming
+                zoomControl: true
             });
 
             this.pickerMarker = null;
@@ -1099,30 +1252,6 @@
                 }
             });
 
-            // GPS button
-            const gpsBtn = modal.querySelector('#location-gps-btn');
-            gpsBtn?.addEventListener('click', () => {
-                if (navigator.geolocation) {
-                    window.SmartAgenda.Toast.info('Getting your location...');
-                    navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                            const pos = {
-                                lat: position.coords.latitude,
-                                lng: position.coords.longitude
-                            };
-                            this.pickerMap.setCenter(pos);
-                            this.pickerMap.setZoom(16);
-                            this.selectLocationOnMap(new google.maps.LatLng(pos.lat, pos.lng));
-                        },
-                        () => {
-                            window.SmartAgenda.Toast.error('Could not get your location');
-                        }
-                    );
-                } else {
-                    window.SmartAgenda.Toast.error('Geolocation not supported');
-                }
-            });
-
             // Enter key for search
             searchInput?.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
@@ -1131,26 +1260,53 @@
             });
         },
 
-        selectLocationOnMap: function(latLng) {
+        selectLocationOnMap: async function(latLng) {
             // Remove old marker
             if (this.pickerMarker) {
-                this.pickerMarker.setMap(null);
+                // Support both Advanced Markers and old Markers
+                if (this.pickerMarker.map !== undefined) {
+                    this.pickerMarker.map = null; // Advanced Marker
+                } else if (this.pickerMarker.setMap) {
+                    this.pickerMarker.setMap(null); // Old Marker
+                }
             }
 
-            // Create new marker
-            this.pickerMarker = new google.maps.Marker({
-                position: latLng,
-                map: this.pickerMap,
-                title: 'Selected Location',
-                icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale: 10,
-                    fillColor: '#FF5722',
-                    fillOpacity: 1,
-                    strokeColor: '#ffffff',
-                    strokeWeight: 2
-                }
-            });
+            try {
+                // Try to use Advanced Markers API (modern)
+                const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker");
+
+                const pinElement = new PinElement({
+                    background: '#FF5722',
+                    borderColor: '#ffffff',
+                    glyphColor: '#ffffff',
+                    scale: 1.3
+                });
+
+                this.pickerMarker = new AdvancedMarkerElement({
+                    map: this.pickerMap,
+                    position: latLng,
+                    title: 'Selected Location',
+                    content: pinElement.element
+                });
+
+                console.log('[Location Picker] Created Advanced Marker');
+            } catch (error) {
+                // Fallback to old markers if Advanced Markers fail
+                console.warn('[Location Picker] Advanced Markers not available, using old markers:', error);
+                this.pickerMarker = new google.maps.Marker({
+                    position: latLng,
+                    map: this.pickerMap,
+                    title: 'Selected Location',
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 10,
+                        fillColor: '#FF5722',
+                        fillOpacity: 1,
+                        strokeColor: '#ffffff',
+                        strokeWeight: 2
+                    }
+                });
+            }
 
             const lat = latLng.lat();
             const lng = latLng.lng();
@@ -1164,15 +1320,6 @@
                     if (status === 'OK' && results[0]) {
                         const address = results[0].formatted_address;
                         this.selectedPickerLocation.address = address;
-
-                        // Update info display
-                        const infoElement = document.getElementById('selected-location-info');
-                        if (infoElement) {
-                            infoElement.innerHTML = `
-                                <div style="color: var(--text-primary); font-weight: 500;">${address}</div>
-                                <div style="font-size: 12px; margin-top: 4px;">Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}</div>
-                            `;
-                        }
                     }
                 });
             }
@@ -1230,13 +1377,20 @@
                 values.desc = descEditor.getValue();
             }
 
-            // Get selected client types
+            // Get selected client types from DOM
             const selectedTypeOptions = modal.querySelectorAll('.type-option.selected');
-            const clientTypes = Array.from(selectedTypeOptions).map(opt => opt.dataset.typeId);
+            let clientTypes = Array.from(selectedTypeOptions).map(opt => opt.dataset.typeId);
 
             // Get primary type (the one with star)
             const primaryStar = Array.from(modal.querySelectorAll('.type-star')).find(s => s.textContent.trim() === '⭐');
-            const primaryType = primaryStar ? primaryStar.closest('.type-option').dataset.typeId : (clientTypes.length > 0 ? clientTypes[0] : null);
+            let primaryType = primaryStar ? primaryStar.closest('.type-option').dataset.typeId : (clientTypes.length > 0 ? clientTypes[0] : null);
+
+            // If no types found in DOM, use backup from global storage
+            if (clientTypes.length === 0 && window.SmartAgenda.tempClientData?.clientTypes?.length > 0) {
+                console.log('Restoring client types from backup');
+                clientTypes = window.SmartAgenda.tempClientData.clientTypes;
+                primaryType = window.SmartAgenda.tempClientData.primaryType || clientTypes[0];
+            }
 
             // Validate at least one type is selected
             if (clientTypes.length === 0) {
@@ -1251,9 +1405,24 @@
             // Get photo
             const photoPreview = modal.querySelector('#client-photo-preview');
             if (photoPreview?.dataset.photo) {
+                // New photo uploaded via dataset
                 values.photo = photoPreview.dataset.photo;
+            } else if (window.SmartAgenda.tempClientData?.photo) {
+                // New photo uploaded (from global backup)
+                values.photo = window.SmartAgenda.tempClientData.photo;
             } else if (photoPreview && !photoPreview.querySelector('img')) {
+                // No photo (removed or never had one)
                 values.photo = null;
+            } else if (existingClient?.photo) {
+                // Keep existing photo if not changed
+                values.photo = existingClient.photo;
+            }
+
+            // Clear temp data after saving
+            if (window.SmartAgenda.tempClientData) {
+                delete window.SmartAgenda.tempClientData.photo;
+                delete window.SmartAgenda.tempClientData.clientTypes;
+                delete window.SmartAgenda.tempClientData.primaryType;
             }
 
             // Get attachments

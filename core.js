@@ -164,9 +164,17 @@
             this.navMenu = document.getElementById('nav-menu');
             this.menuOverlay = document.getElementById('menu-overlay');
             this.navItems = document.querySelectorAll('.nav-item[data-tab]');
-            
+
             this.bindEvents();
             this.restoreActiveTab();
+
+            // Listen for language changes and update header title
+            EventBus.on('language:change', () => {
+                const currentTab = State.get('currentTab');
+                if (currentTab) {
+                    this.updateHeaderTitle(currentTab);
+                }
+            });
         },
         
         bindEvents: function() {
@@ -188,6 +196,22 @@
                 const hash = window.location.hash.slice(1) || 'clients';
                 this.switchTab(hash, false);
             });
+
+            // Header add button
+            const headerAddButton = document.getElementById('header-add-button');
+            if (headerAddButton) {
+                headerAddButton.addEventListener('click', () => {
+                    const currentTab = State.get('currentTab');
+
+                    if (currentTab === 'clients' && window.SmartAgenda?.Clients) {
+                        window.SmartAgenda.Clients.showClientModal();
+                    } else if (currentTab === 'appointments' && window.SmartAgenda?.Appointments) {
+                        window.SmartAgenda.Appointments.showAppointmentModal();
+                    } else if (currentTab === 'tasks' && window.SmartAgenda?.Tasks) {
+                        window.SmartAgenda.Tasks.showTaskModal();
+                    }
+                });
+            }
         },
         
         toggleMenu: function() {
@@ -205,13 +229,17 @@
             this.navMenu.classList.add('open');
             this.menuOverlay.classList.add('active');
             this.menuButton.classList.add('active');
+            // Prevent background scrolling when menu is open
+            document.body.style.overflow = 'hidden';
         },
-        
+
         closeMenu: function() {
             this.navMenu.classList.remove('open');
             this.menuOverlay.classList.remove('active');
             this.menuButton.classList.remove('active');
             State.set('isMenuOpen', false);
+            // Re-enable scrolling when menu closes
+            document.body.style.overflow = '';
         },
         
         /**
@@ -224,13 +252,13 @@
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
-            
+
             // Show selected tab
             const selectedTab = document.getElementById(`${tabName}-tab`);
             if (selectedTab) {
                 selectedTab.classList.add('active');
             }
-            
+
             // Update nav items
             this.navItems.forEach(item => {
                 if (item.dataset.tab === tabName) {
@@ -239,18 +267,38 @@
                     item.classList.remove('active');
                 }
             });
-            
+
             // Update state
             State.set('currentTab', tabName);
-            
+
             // Update header title
             this.updateHeaderTitle(tabName);
-            
+
             // Update URL
             if (updateHistory) {
                 window.history.pushState({}, '', `#${tabName}`);
             }
-            
+
+            // Show/hide map menu button
+            const mapMenuButton = document.getElementById('map-menu-button');
+            if (mapMenuButton) {
+                if (tabName === 'map') {
+                    mapMenuButton.style.display = 'flex';
+                } else {
+                    mapMenuButton.style.display = 'none';
+                }
+            }
+
+            // Show/hide header add button based on active tab
+            const headerAddButton = document.getElementById('header-add-button');
+            if (headerAddButton) {
+                if (tabName === 'clients' || tabName === 'appointments' || tabName === 'tasks') {
+                    headerAddButton.style.display = 'flex';
+                } else {
+                    headerAddButton.style.display = 'none';
+                }
+            }
+
             // Initialize map when switching to map tab
             if (tabName === 'map') {
                 setTimeout(() => {
@@ -289,27 +337,45 @@
         },
         
         updateHeaderTitle: function(tabName) {
-            const titles = {
-                home: '🏠 Home',
-                clients: '👥 Clients',
-                appointments: '📅 Appointments',
-                tasks: '✓ Tasks',
-                map: '🗺️ Map',
-                finance: '💰 Finance',
-                calendar: '📆 Calendar',
-                interactions: '🤝 Interactions',
-                advanced: '⚡ Advanced',
-                settings: '⚙️ Settings'
+            // Use i18n for translations
+            const i18n = window.SmartAgenda?.I18n || window.SmartAgenda?.i18n;
+            const t = (key) => i18n ? i18n.translate(key) : key;
+
+            const titleKeys = {
+                home: 'nav.home',
+                clients: 'nav.clients',
+                appointments: 'nav.appointments',
+                tasks: 'nav.tasks',
+                map: 'nav.map',
+                finance: 'nav.finance',
+                calendar: 'nav.calendar',
+                interactions: 'nav.interactions',
+                advanced: 'nav.advanced',
+                settings: 'nav.settings'
             };
-            
+
+            const icons = {
+                home: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
+                clients: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+                appointments: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>',
+                tasks: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
+                map: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>',
+                finance: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>',
+                calendar: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><rect x="7" y="14" width="3" height="3"></rect></svg>',
+                interactions: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>',
+                advanced: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>',
+                settings: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>'
+            };
+
             const headerTitle = document.getElementById('header-title');
             if (headerTitle) {
-                const titleText = titles[tabName] || 'Smart Agenda';
-                headerTitle.textContent = titleText.split(' ')[1] || titleText;
-                
+                const titleKey = titleKeys[tabName];
+                const titleText = titleKey ? t(titleKey) : 'Smart Agenda';
+                headerTitle.textContent = titleText;
+
                 const headerIcon = document.querySelector('.header-icon');
                 if (headerIcon) {
-                    headerIcon.textContent = titles[tabName]?.split(' ')[0] || '📊';
+                    headerIcon.innerHTML = icons[tabName] || '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>';
                 }
             }
         },
@@ -357,9 +423,14 @@
         },
         
         setTheme: function(theme, save = true) {
+            // If switching away from colorful theme, clear its styles
+            if (theme !== 'colorful' && window.SmartAgenda.ColorfulThemeManager) {
+                window.SmartAgenda.ColorfulThemeManager.clearColorfulThemeStyles();
+            }
+
             document.documentElement.setAttribute('data-theme', theme);
             State.set('currentTheme', theme);
-            
+
             // Update theme toggle icon
             if (this.themeToggle) {
                 const icon = this.themeToggle.querySelector('.theme-icon');
@@ -367,12 +438,12 @@
                     icon.textContent = theme === 'dark' ? '☀️' : '🌙';
                 }
             }
-            
+
             // Update select value
             if (this.themeSelect) {
                 this.themeSelect.value = theme;
             }
-            
+
             if (save) {
                 localStorage.setItem('theme', theme);
             }
@@ -562,12 +633,21 @@
             Navigation.init();
             KeyboardHandler.init();
 
-            // Hide loading screen
+            // Hide loading screen (unless welcome screen will show)
             setTimeout(() => {
-                document.getElementById('loading-screen').style.display = 'none';
-                document.getElementById('app').style.display = 'flex';
+                // Check if welcome screen should show
+                const willShowWelcome = window.SmartAgenda?.WelcomeScreen?.shouldShow();
 
-                // Emit app ready event
+                if (!willShowWelcome) {
+                    // Normal startup - hide loading and show app
+                    document.getElementById('loading-screen').style.display = 'none';
+                    document.getElementById('app').style.display = 'flex';
+                } else {
+                    // Welcome screen will show - keep loading visible, hide app
+                    console.log('📋 Welcome screen will be shown - keeping loading screen');
+                }
+
+                // Emit app ready event (welcome screen listens to this)
                 EventBus.emit('app:ready');
 
                 console.log('✅ Smart Agenda is ready!');

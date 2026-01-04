@@ -28,12 +28,60 @@
         },
 
         bindEvents: function() {
+            // Settings Category Buttons
+            const appearanceBtn = document.getElementById('settings-appearance-btn');
+            const notificationsBtn = document.getElementById('settings-notifications-btn');
+            const clientTypesBtn = document.getElementById('settings-client-types-btn');
+            const dataBtn = document.getElementById('settings-data-btn');
+            const helpBtn = document.getElementById('settings-help-btn');
+            const aboutBtn = document.getElementById('settings-about-btn');
+
+            if (appearanceBtn) {
+                appearanceBtn.addEventListener('click', () => this.showCategoryModal('appearance'));
+            }
+            if (notificationsBtn) {
+                notificationsBtn.addEventListener('click', () => this.showCategoryModal('notifications'));
+            }
+            if (clientTypesBtn) {
+                clientTypesBtn.addEventListener('click', () => this.showCategoryModal('client-types'));
+            }
+            if (dataBtn) {
+                dataBtn.addEventListener('click', () => this.showCategoryModal('data'));
+            }
+            if (helpBtn) {
+                helpBtn.addEventListener('click', () => this.showCategoryModal('help'));
+            }
+            if (aboutBtn) {
+                aboutBtn.addEventListener('click', () => this.showCategoryModal('about'));
+            }
+
+            // Back button
+            const backBtn = document.getElementById('settings-back-btn');
+            if (backBtn) {
+                backBtn.addEventListener('click', () => this.goBackToMainMenu());
+            }
+
+            // Header action button (for add client type)
+            const headerActionBtn = document.getElementById('add-client-type-header-btn');
+            if (headerActionBtn) {
+                headerActionBtn.addEventListener('click', () => this.showAddClientTypeModal());
+            }
+
+            // Listen for language changes to update header
+            if (window.SmartAgenda && window.SmartAgenda.EventBus) {
+                window.SmartAgenda.EventBus.on('language:change', () => {
+                    // If we're in a category view, update the header
+                    if (this.currentCategory) {
+                        this.updateHeaderTranslations(this.currentCategory);
+                    }
+                });
+            }
+
             const exportBtn = document.getElementById('export-data-btn');
             const shareBackupBtn = document.getElementById('share-backup-btn');
             const importBtn = document.getElementById('import-data-btn');
             const fileManagerBtn = document.getElementById('file-manager-btn');
             const clearBtn = document.getElementById('clear-data-btn');
-            const addClientTypeBtn = document.getElementById('add-client-type-btn');
 
             // Firebase Auth buttons
             const signinBtn = document.getElementById('signin-btn');
@@ -102,45 +150,199 @@
                 });
             }
 
-            if (addClientTypeBtn) {
-                addClientTypeBtn.addEventListener('click', () => this.showAddClientTypeModal());
+            // New Google Drive Backup UI
+            const gdriveSigninBtn = document.getElementById('gdrive-signin-btn');
+            const gdriveDisconnectBtn = document.getElementById('gdrive-disconnect-btn');
+            const gdriveBackupNowBtn = document.getElementById('gdrive-backup-now-btn');
+            const gdriveRestoreBtn = document.getElementById('gdrive-restore-btn');
+            const gdriveAutoBackupSelect = document.getElementById('gdrive-auto-backup');
+
+            if (gdriveSigninBtn) {
+                gdriveSigninBtn.addEventListener('click', async () => {
+                    try {
+                        await window.SmartAgenda.GoogleDriveService.signIn();
+                        const i18n = window.SmartAgenda.I18n;
+                        window.SmartAgenda.Toast.success(i18n.translate('gdrive.connected'));
+                        this.updateGoogleDriveUI();
+                    } catch (error) {
+                        console.error('Sign-in error:', error);
+                        const i18n = window.SmartAgenda.I18n;
+                        window.SmartAgenda.Toast.error(i18n.translate('gdrive.connectionError') + error.message);
+                    }
+                });
             }
 
-            // Firebase Auth event listeners
-            if (signinBtn) {
-                signinBtn.addEventListener('click', () => this.showSignInModal());
-            }
-
-            if (createAccountBtn) {
-                createAccountBtn.addEventListener('click', () => this.showCreateAccountModal());
-            }
-
-            if (signoutBtn) {
-                signoutBtn.addEventListener('click', async () => {
+            if (gdriveDisconnectBtn) {
+                gdriveDisconnectBtn.addEventListener('click', async () => {
+                    const i18n = window.SmartAgenda.I18n;
                     const confirmed = await window.SmartAgenda.UIComponents.confirm({
-                        title: 'Sign Out',
-                        message: 'Are you sure you want to sign out?',
-                        confirmText: 'Sign Out',
+                        title: i18n.translate('gdrive.disconnectTitle'),
+                        message: i18n.translate('gdrive.disconnectMessage'),
+                        confirmText: i18n.translate('gdrive.disconnect'),
                         type: 'warning'
                     });
-                    if (confirmed && window.SmartAgenda.FirebaseService) {
-                        await window.SmartAgenda.FirebaseService.signOut();
+                    if (confirmed && window.SmartAgenda.GoogleDriveService) {
+                        window.SmartAgenda.GoogleDriveService.signOut();
+                        this.updateGoogleDriveUI();
                     }
                 });
             }
 
-            if (backupBtn) {
-                backupBtn.addEventListener('click', async () => {
-                    if (window.SmartAgenda.FirebaseService) {
-                        await window.SmartAgenda.FirebaseService.backupAllData();
+            if (gdriveBackupNowBtn) {
+                gdriveBackupNowBtn.addEventListener('click', async () => {
+                    try {
+                        if (!window.SmartAgenda.GoogleDriveService.currentUser) {
+                            const i18n = window.SmartAgenda.I18n;
+                            window.SmartAgenda.Toast.error(i18n.translate('gdrive.pleaseSignIn'));
+                            return;
+                        }
+
+                        // Create backup without password
+                        await window.SmartAgenda.BackupService.createBackup();
+                        this.updateGoogleDriveUI();
+
+                    } catch (error) {
+                        console.error('Backup error:', error);
                     }
                 });
             }
 
-            if (restoreBtn) {
-                restoreBtn.addEventListener('click', async () => {
-                    if (window.SmartAgenda.FirebaseService) {
-                        await window.SmartAgenda.FirebaseService.restoreBackup();
+            if (gdriveRestoreBtn) {
+                gdriveRestoreBtn.addEventListener('click', async () => {
+                    console.log('🔍 Restore button clicked');
+                    const i18n = window.SmartAgenda.I18n;
+                    try {
+                        // Check authentication
+                        if (!window.SmartAgenda.GoogleDriveService.currentUser) {
+                            console.log('❌ Not authenticated');
+                            window.SmartAgenda.Toast.error(i18n.translate('gdrive.pleaseSignIn'));
+                            return;
+                        }
+                        console.log('✅ User authenticated:', window.SmartAgenda.GoogleDriveService.currentUser.email);
+
+                        // List available backups
+                        console.log('📋 Listing available backups...');
+                        const backups = await window.SmartAgenda.BackupService.listAvailableBackups();
+                        console.log('✅ Found backups:', backups.length, backups);
+
+                        if (backups.length === 0) {
+                            console.log('⚠️ No backups found');
+                            window.SmartAgenda.Toast.info(i18n.translate('gdrive.noBackupsFound'));
+                            return;
+                        }
+
+                        // Show backup selection modal
+                        console.log('📝 Showing backup selection modal...');
+                        const selected = await this.showBackupSelectionModal(backups);
+                        console.log('✅ User selected:', selected);
+                        if (!selected) {
+                            console.log('⚠️ User cancelled selection');
+                            return;
+                        }
+
+                        // Restore backup without password
+                        console.log('🔄 Starting restore for backup:', selected.id);
+                        await window.SmartAgenda.BackupService.restoreBackup(selected.id);
+                        console.log('✅ Restore completed successfully');
+
+                    } catch (error) {
+                        console.error('❌ Restore error:', error);
+                        console.error('Error stack:', error.stack);
+                        if (window.SmartAgenda && window.SmartAgenda.Toast) {
+                            window.SmartAgenda.Toast.error(i18n.translate('gdrive.restoreError') + error.message);
+                        }
+                    }
+                });
+            }
+
+            if (gdriveAutoBackupSelect) {
+                gdriveAutoBackupSelect.addEventListener('change', (e) => {
+                    const frequency = e.target.value;
+                    localStorage.setItem('gdrive_auto_backup_frequency', frequency);
+                    window.SmartAgenda.Toast.success(`Auto backup: ${frequency}`);
+
+                    // Reschedule auto backup
+                    if (window.SmartAgenda.BackupService) {
+                        window.SmartAgenda.BackupService.scheduleAutoBackup();
+                    }
+                });
+            }
+
+            // Fancy Graphics toggle
+            const fancyGraphicsToggle = document.getElementById('fancy-graphics-toggle');
+            if (fancyGraphicsToggle) {
+                // Listen for changes on the checkbox
+                fancyGraphicsToggle.addEventListener('change', (e) => {
+                    const enabled = e.target.checked;
+                    console.log('Fancy Graphics toggled:', enabled);
+
+                    if (window.SmartAgenda && window.SmartAgenda.Performance) {
+                        window.SmartAgenda.Performance.setFancyGraphics(enabled);
+                    }
+                });
+
+                // Also handle clicks on the slider (since checkbox is invisible)
+                const slider = fancyGraphicsToggle.nextElementSibling;
+                if (slider && slider.classList.contains('android-toggle-slider')) {
+                    slider.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        fancyGraphicsToggle.checked = !fancyGraphicsToggle.checked;
+                        fancyGraphicsToggle.dispatchEvent(new Event('change'));
+                    });
+                }
+            }
+
+            // Update fancy graphics status on page load
+            setTimeout(() => {
+                this.updateFancyGraphicsStatus();
+            }, 100);
+
+            // Restart Tutorial button
+            const restartTutorialBtn = document.getElementById('restart-tutorial-btn');
+            if (restartTutorialBtn) {
+                restartTutorialBtn.addEventListener('click', () => {
+                    if (window.SmartAgenda && window.SmartAgenda.Tutorial) {
+                        window.SmartAgenda.Tutorial.start();
+                    } else {
+                        console.error('Tutorial module not loaded');
+                        window.SmartAgenda.Toast.error('Tutorial module not available');
+                    }
+                });
+            }
+
+            // Secret ads toggle (5 clicks on About section)
+            const aboutSection = document.getElementById('about-settings-content');
+            if (aboutSection) {
+                let clickCount = 0;
+                let clickTimer = null;
+
+                aboutSection.addEventListener('click', () => {
+                    clickCount++;
+
+                    // Reset counter after 2 seconds of inactivity
+                    clearTimeout(clickTimer);
+                    clickTimer = setTimeout(() => {
+                        clickCount = 0;
+                    }, 2000);
+
+                    if (clickCount === 5) {
+                        // Toggle ads
+                        const currentState = localStorage.getItem('ads-enabled') !== 'false';
+                        const newState = !currentState;
+                        localStorage.setItem('ads-enabled', newState.toString());
+
+                        // Reset counter
+                        clickCount = 0;
+
+                        // Show toast (brief feedback)
+                        if (newState) {
+                            window.SmartAgenda.Toast.success('Ads enabled');
+                        } else {
+                            window.SmartAgenda.Toast.success('Ads disabled');
+                        }
+
+                        console.log('[Secret Toggle] Ads toggled to:', newState);
                     }
                 });
             }
@@ -221,12 +423,17 @@
                 typeItem.innerHTML = `
                     <div style="width: 32px; height: 32px; border-radius: 50%; background: ${type.color}; margin-right: 12px;"></div>
                     <div style="flex: 1; font-weight: 500;">${this.escapeHtml(type.name)}</div>
-                    <button class="edit-type-btn" data-id="${type.id}" style="padding: 6px 12px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px;">
-                        ${i18n.translate('actions.edit')}
+                    <button class="edit-type-btn" data-id="${type.id}" style="padding: 8px 12px; background: var(--primary-color); color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px; display: flex; align-items: center; justify-content: center;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
                     </button>
                     ${type.deletable !== false ? `
-                        <button class="delete-type-btn" data-id="${type.id}" style="padding: 6px 12px; background: var(--danger); color: white; border: none; border-radius: 4px; cursor: pointer;">
-                            ${i18n.translate('actions.delete')}
+                        <button class="delete-type-btn" data-id="${type.id}" style="padding: 8px 12px; background: var(--danger); color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>
+                            </svg>
                         </button>
                     ` : ''}
                 `;
@@ -909,11 +1116,464 @@
                     ]
                 });
             });
+        },
+
+        /**
+         * Show backup selection modal for restore
+         * @param {Array} backups - Available backups
+         * @returns {Promise<Object|null>} Selected backup or null
+         */
+        showBackupSelectionModal: function(backups) {
+            return new Promise((resolve) => {
+                const i18n = window.SmartAgenda.I18n;
+
+                const formatFileSize = (bytes) => {
+                    if (!bytes || bytes === 0) return 'N/A';
+                    const mb = bytes / (1024 * 1024);
+                    return mb.toFixed(2) + ' MB';
+                };
+
+                const formatDate = (dateString) => {
+                    if (!dateString) return 'N/A';
+                    const date = new Date(dateString);
+                    return date.toLocaleString('el-GR', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                };
+
+                const backupsList = backups.map(backup => `
+                    <div class="backup-item" data-backup-id="${backup.id}"
+                         style="padding: 16px; border: 2px solid var(--border); border-radius: 8px; margin-bottom: 12px; cursor: pointer; transition: all 0.2s;"
+                         onmouseover="this.style.borderColor='var(--primary-color)'; this.style.background='var(--primary-color)11';"
+                         onmouseout="this.style.borderColor='var(--border)'; this.style.background='transparent';">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                            <div>
+                                <div style="font-weight: 600; margin-bottom: 4px;">${this.escapeHtml(backup.name)}</div>
+                                <div style="font-size: 13px; color: var(--text-secondary);">
+                                    📅 ${formatDate(backup.created)}
+                                </div>
+                            </div>
+                            <div style="text-align: right; font-size: 13px; color: var(--text-secondary);">
+                                <div>${formatFileSize(backup.size)}</div>
+                                <div>${backup.deviceType || 'unknown'}</div>
+                            </div>
+                        </div>
+                        ${backup.itemCounts ? `
+                            <div style="display: flex; gap: 16px; font-size: 13px; color: var(--text-secondary);">
+                                <span>${backup.itemCounts.clients || 0} ${i18n.translate('gdrive.clients')}</span>
+                                <span>${backup.itemCounts.appointments || 0} ${i18n.translate('gdrive.appointments')}</span>
+                                <span>${backup.itemCounts.tasks || 0} ${i18n.translate('gdrive.tasks')}</span>
+                                ${backup.hasAttachments ? `<span>${i18n.translate('gdrive.withFiles')}</span>` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+
+                const content = `
+                    <div style="padding: 16px;">
+                        <p style="margin-bottom: 16px; color: var(--text-secondary);">
+                            ${i18n.translate('gdrive.selectBackup')}
+                        </p>
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            ${backupsList}
+                        </div>
+                        <div style="background: var(--warning-bg); border-left: 4px solid var(--warning-color); padding: 12px; border-radius: 6px; margin-top: 16px;">
+                            <div style="font-size: 13px; color: var(--text-secondary);">
+                                ⚠️ <strong>${i18n.translate('gdrive.warning')}</strong> ${i18n.translate('gdrive.warningMessage')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const modal = window.SmartAgenda.UIComponents.showModal({
+                    title: '☁️ ' + i18n.translate('gdrive.selectBackupTitle'),
+                    content: content,
+                    buttons: [
+                        {
+                            label: i18n.translate('actions.cancel'),
+                            type: 'secondary',
+                            onClick: () => {
+                                window.SmartAgenda.UIComponents.closeModal(modal);
+                                resolve(null);
+                            }
+                        }
+                    ],
+                    size: 'medium'
+                });
+
+                // Add click listeners to backup items
+                setTimeout(() => {
+                    document.querySelectorAll('.backup-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            const backupId = item.dataset.backupId;
+                            const selected = backups.find(b => b.id === backupId);
+                            window.SmartAgenda.UIComponents.closeModal(modal);
+                            resolve(selected);
+                        });
+                    });
+                }, 100);
+            });
+        },
+
+        /**
+         * Update Google Drive UI based on connection state
+         */
+        updateGoogleDriveUI: function() {
+            const notConnected = document.getElementById('gdrive-not-connected');
+            const connected = document.getElementById('gdrive-connected');
+            const accountEmail = document.getElementById('gdrive-account-email');
+            const lastBackup = document.getElementById('gdrive-last-backup');
+            const backupSize = document.getElementById('gdrive-backup-size');
+            const autoBackupSelect = document.getElementById('gdrive-auto-backup');
+            const backupDocsCheckbox = document.getElementById('gdrive-backup-documents');
+            const backupPhotosCheckbox = document.getElementById('gdrive-backup-photos');
+
+            // Check if user is signed in
+            const isSignedIn = window.SmartAgenda.GoogleDriveService.currentUser !== null;
+
+            if (isSignedIn) {
+                // Show connected state
+                if (notConnected) notConnected.style.display = 'none';
+                if (connected) connected.style.display = 'block';
+
+                // Update account email
+                const user = window.SmartAgenda.GoogleDriveService.currentUser;
+                if (accountEmail && user) {
+                    accountEmail.textContent = user.email || 'user@gmail.com';
+                }
+
+                // Update hamburger menu
+                const userName = document.getElementById('user-name');
+                const userEmail = document.getElementById('user-email');
+                if (userName && user) userName.textContent = user.name || user.email;
+                if (userEmail && user) userEmail.textContent = user.email;
+
+                // Load backup metadata
+                const metadata = localStorage.getItem('gdrive_last_backup_metadata');
+                if (metadata) {
+                    try {
+                        const data = JSON.parse(metadata);
+                        if (lastBackup && data.timestamp) {
+                            const date = new Date(data.timestamp);
+                            const now = new Date();
+                            const diff = now - date;
+                            const hours = Math.floor(diff / (1000 * 60 * 60));
+                            const days = Math.floor(hours / 24);
+
+                            let timeAgo = '';
+                            if (days > 0) {
+                                timeAgo = days === 1 ? 'Yesterday' : `${days} days ago`;
+                            } else if (hours > 0) {
+                                timeAgo = hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+                            } else {
+                                timeAgo = 'Just now';
+                            }
+
+                            lastBackup.textContent = `Last backup: ${timeAgo}`;
+                        }
+                        if (backupSize && data.size) {
+                            const mb = (data.size / (1024 * 1024)).toFixed(2);
+                            backupSize.textContent = `Size: ${mb} MB`;
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse backup metadata:', e);
+                    }
+                }
+
+                // Load auto backup frequency
+                const frequency = localStorage.getItem('gdrive_auto_backup_frequency') || 'daily';
+                if (autoBackupSelect) {
+                    autoBackupSelect.value = frequency;
+                }
+
+                // Load backup options
+                const includeDocuments = localStorage.getItem('gdrive_backup_documents') !== 'false';
+                const includePhotos = localStorage.getItem('gdrive_backup_photos') !== 'false';
+                if (backupDocsCheckbox) backupDocsCheckbox.checked = includeDocuments;
+                if (backupPhotosCheckbox) backupPhotosCheckbox.checked = includePhotos;
+
+                // Update backup status indicator in menu
+                const backupStatusIndicator = document.getElementById('backup-status-indicator');
+                const backupStatusText = document.getElementById('backup-status-text');
+                if (backupStatusIndicator) backupStatusIndicator.style.display = 'block';
+                if (backupStatusText && metadata) {
+                    try {
+                        const data = JSON.parse(metadata);
+                        if (data.timestamp) {
+                            const date = new Date(data.timestamp);
+                            const timeStr = date.toLocaleString('el-GR', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                            backupStatusText.textContent = `Last backup: ${timeStr}`;
+                        }
+                    } catch (e) {}
+                }
+
+            } else {
+                // Show not connected state
+                if (notConnected) notConnected.style.display = 'block';
+                if (connected) connected.style.display = 'none';
+
+                // Reset hamburger menu to guest
+                const userName = document.getElementById('user-name');
+                const userEmail = document.getElementById('user-email');
+                if (userName) userName.textContent = 'Guest User';
+                if (userEmail) userEmail.textContent = 'Not signed in';
+
+                // Hide backup status indicator
+                const backupStatusIndicator = document.getElementById('backup-status-indicator');
+                if (backupStatusIndicator) backupStatusIndicator.style.display = 'none';
+            }
+
+            // Save checkbox state changes
+            if (backupDocsCheckbox) {
+                backupDocsCheckbox.addEventListener('change', (e) => {
+                    localStorage.setItem('gdrive_backup_documents', e.target.checked);
+                });
+            }
+            if (backupPhotosCheckbox) {
+                backupPhotosCheckbox.addEventListener('change', (e) => {
+                    localStorage.setItem('gdrive_backup_photos', e.target.checked);
+                });
+            }
+        },
+
+        /**
+         * Update Fancy Graphics status display
+         */
+        updateFancyGraphicsStatus: function() {
+            const toggle = document.getElementById('fancy-graphics-toggle');
+
+            if (!window.SmartAgenda || !window.SmartAgenda.Performance) {
+                return;
+            }
+
+            const perf = window.SmartAgenda.Performance;
+            const fancyEnabled = perf.isFancyGraphicsEnabled();
+
+            // Set toggle state
+            if (toggle) {
+                toggle.checked = fancyEnabled;
+            }
+
+            console.log('Fancy Graphics status updated:', { fancyEnabled});
+        },
+
+        /**
+         * Show settings category view
+         */
+        showCategoryModal: function(category) {
+            const i18n = window.SmartAgenda.I18n;
+
+            // Category icons, titles and subtitles
+            const categories = {
+                'appearance': {
+                    title: i18n.translate('settings.appearance'),
+                    subtitle: i18n.translate('category.appearance_subtitle'),
+                    contentId: 'appearance-settings-content',
+                    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>`
+                },
+                'notifications': {
+                    title: i18n.translate('notifications.title'),
+                    subtitle: i18n.translate('notifications.description'),
+                    contentId: 'notifications-settings-content',
+                    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>`
+                },
+                'client-types': {
+                    title: i18n.translate('settings.client_types'),
+                    subtitle: i18n.translate('settings.client_types_desc'),
+                    contentId: 'client-types-settings-content',
+                    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>`
+                },
+                'data': {
+                    title: i18n.translate('settings.data'),
+                    subtitle: i18n.translate('category.data_subtitle'),
+                    contentId: 'data-settings-content',
+                    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                    </svg>`
+                },
+                'help': {
+                    title: i18n.translate('help.title'),
+                    subtitle: i18n.translate('help.description'),
+                    contentId: 'help-settings-content',
+                    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>`
+                },
+                'about': {
+                    title: i18n.translate('settings.about'),
+                    subtitle: i18n.translate('category.about_subtitle'),
+                    contentId: 'about-settings-content',
+                    icon: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>`
+                }
+            };
+
+            const categoryInfo = categories[category];
+            if (!categoryInfo) return;
+
+            // Hide main menu
+            document.getElementById('settings-main-menu').style.display = 'none';
+
+            // Show header with back button
+            const header = document.getElementById('settings-header');
+            header.style.display = 'flex';
+
+            // Update header icon, title and subtitle
+            document.getElementById('settings-header-icon').innerHTML = categoryInfo.icon;
+            document.getElementById('settings-header-title').textContent = categoryInfo.title;
+            document.getElementById('settings-header-subtitle').textContent = categoryInfo.subtitle || '';
+
+            // Show/hide header action button based on category
+            const headerActionBtn = document.getElementById('add-client-type-header-btn');
+            if (headerActionBtn) {
+                headerActionBtn.style.display = (category === 'client-types') ? 'flex' : 'none';
+            }
+
+            // Hide all views
+            document.querySelectorAll('.settings-view').forEach(view => {
+                view.style.display = 'none';
+            });
+
+            // Show selected view
+            const contentElement = document.getElementById(categoryInfo.contentId);
+            if (contentElement) {
+                contentElement.style.display = 'block';
+            }
+
+            // Store current category for back button
+            this.currentCategory = category;
+
+            // Re-initialize components for the visible view
+            setTimeout(() => {
+                if (category === 'client-types') {
+                    this.renderClientTypes();
+                }
+                if (category === 'data') {
+                    this.updateGoogleDriveUI();
+                }
+            }, 50);
+        },
+
+        /**
+         * Go back to main settings menu
+         */
+        goBackToMainMenu: function() {
+            // Hide header
+            document.getElementById('settings-header').style.display = 'none';
+
+            // Hide header action button
+            const headerActionBtn = document.getElementById('add-client-type-header-btn');
+            if (headerActionBtn) {
+                headerActionBtn.style.display = 'none';
+            }
+
+            // Hide all views
+            document.querySelectorAll('.settings-view').forEach(view => {
+                view.style.display = 'none';
+            });
+
+            // Show main menu
+            document.getElementById('settings-main-menu').style.display = 'flex';
+
+            this.currentCategory = null;
+        },
+
+        /**
+         * Update header translations when language changes
+         */
+        updateHeaderTranslations: function(category) {
+            const i18n = window.SmartAgenda.I18n;
+
+            // Category icons, titles and subtitles (same as in showCategoryModal)
+            const categories = {
+                'appearance': {
+                    title: i18n.translate('settings.appearance'),
+                    subtitle: i18n.translate('category.appearance_subtitle')
+                },
+                'notifications': {
+                    title: i18n.translate('notifications.title'),
+                    subtitle: i18n.translate('notifications.description')
+                },
+                'client-types': {
+                    title: i18n.translate('settings.client_types'),
+                    subtitle: i18n.translate('settings.client_types_desc')
+                },
+                'data': {
+                    title: i18n.translate('settings.data'),
+                    subtitle: i18n.translate('category.data_subtitle')
+                },
+                'help': {
+                    title: i18n.translate('help.title'),
+                    subtitle: i18n.translate('help.description')
+                },
+                'about': {
+                    title: i18n.translate('settings.about'),
+                    subtitle: i18n.translate('category.about_subtitle')
+                }
+            };
+
+            const categoryInfo = categories[category];
+            if (categoryInfo) {
+                // Update header title and subtitle
+                const titleElement = document.getElementById('settings-header-title');
+                const subtitleElement = document.getElementById('settings-header-subtitle');
+
+                if (titleElement) {
+                    titleElement.textContent = categoryInfo.title;
+                }
+                if (subtitleElement) {
+                    subtitleElement.textContent = categoryInfo.subtitle || '';
+                }
+            }
         }
     };
 
     if (window.SmartAgenda) {
-        window.SmartAgenda.EventBus.on('app:ready', () => Settings.init());
+        window.SmartAgenda.EventBus.on('app:ready', () => {
+            Settings.init();
+            Settings.updateGoogleDriveUI();
+        });
+
+        // Listen to tab changes to reset settings view
+        window.SmartAgenda.EventBus.on('tab:change', (tab) => {
+            if (tab === 'settings') {
+                // Reset to main menu when opening settings tab
+                Settings.goBackToMainMenu();
+            }
+        });
+
         window.SmartAgenda.Settings = Settings;
     }
 })();

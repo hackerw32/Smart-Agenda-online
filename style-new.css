@@ -301,10 +301,18 @@ body {
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
     backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     opacity: 0;
     visibility: hidden;
     transition: opacity var(--transition-base), visibility var(--transition-base);
     z-index: 150;
+}
+
+/* Performance mode: darker background instead of blur */
+.performance-mode .menu-overlay {
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 .menu-overlay.active {

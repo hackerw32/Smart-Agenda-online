@@ -189,37 +189,113 @@
 
         createTaskCard: function(task) {
             const card = document.createElement('div');
-            card.className = 'task-item';
+            card.className = 'task-item modern-task-card';
             card.dataset.id = task.id;
 
             if (task.completed) card.classList.add('completed');
             if (this.isOverdue(task) && !task.completed) card.classList.add('overdue');
 
-            const priorityColors = { high: '#ef4444', medium: '#f59e0b', low: '#10b981' };
-            const priorityColor = priorityColors[task.priority] || '#94a3b8';
+            const priorityConfig = {
+                high: { icon: '🔴', color: '#ef4444', label: 'High' },
+                medium: { icon: '🟠', color: '#f59e0b', label: 'Medium' },
+                low: { icon: '🟢', color: '#10b981', label: 'Low' }
+            };
+            const priority = priorityConfig[task.priority] || priorityConfig.medium;
 
-            const clientName = task.clientName || this.getClientName(task.client) || 'Standalone Task';
+            const clientName = task.clientName || this.getClientName(task.client) || 'Standalone';
             const dateDisplay = task.date ? this.formatDate(task.date) : '';
 
+            // Get translated priority
+            const i18n = window.SmartAgenda.I18n;
+            const translatedPriority = i18n.translate(`priority.${task.priority || 'medium'}`);
+
+            // Completion checkbox
+            const checkboxIcon = task.completed
+                ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><circle cx="12" cy="12" r="10" fill="#10b98122"></circle><polyline points="9 12 11 14 15 10"></polyline></svg>`
+                : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--border)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg>`;
+
             card.innerHTML = `
-                <div class="task-priority-bar" style="background: ${priorityColor}"></div>
-                <div class="task-content">
-                    <div class="task-header">
-                        <div class="task-title">${this.escapeHtml(clientName)}</div>
-                        ${dateDisplay ? `<div class="task-date">${dateDisplay}</div>` : ''}
+                <div style="display: flex; gap: 12px; width: 100%;">
+                    <!-- Checkbox -->
+                    <div class="task-checkbox" style="flex-shrink: 0; cursor: pointer;">
+                        ${checkboxIcon}
                     </div>
-                    ${task.desc ? `<div class="task-description">${this.escapeHtml(this.stripHtml(task.desc).substring(0, 100))}${this.stripHtml(task.desc).length > 100 ? '...' : ''}</div>` : ''}
-                    <div class="task-footer">
-                        <span class="task-priority" style="color: ${priorityColor}">${task.priority ? task.priority.toUpperCase() : 'MEDIUM'}</span>
-                        ${task.amount ? `<span class="task-amount">${window.SmartAgenda.State.get('currentCurrency')}${parseFloat(task.amount).toFixed(2)}</span>` : ''}
-                        ${task.isStandalone ? `<span class="task-standalone-badge">📌 Standalone</span>` : ''}
+
+                    <!-- Priority Indicator -->
+                    <div style="width: 4px; background: ${priority.color}; border-radius: 4px; flex-shrink: 0;"></div>
+
+                    <div style="flex: 1; min-width: 0;">
+                        <!-- Header -->
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+                                <div style="font-size: 15px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; ${task.completed ? 'text-decoration: line-through; opacity: 0.6;' : ''}">
+                                    ${this.escapeHtml(clientName)}
+                                </div>
+                                ${task.isStandalone ? `<span style="background: var(--primary-light); color: var(--primary-color); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; flex-shrink: 0;">Standalone</span>` : ''}
+                            </div>
+                            <div style="font-size: 16px; flex-shrink: 0;">${priority.icon}</div>
+                        </div>
+
+                        <!-- Date -->
+                        ${dateDisplay ? `
+                            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 13px; color: var(--text-secondary);">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                <span>${dateDisplay}</span>
+                            </div>
+                        ` : ''}
+
+                        <!-- Description -->
+                        ${task.desc ? `
+                            <div style="font-size: 12px; color: var(--text-tertiary); margin-bottom: 10px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4; ${task.completed ? 'opacity: 0.6;' : ''}">
+                                ${this.escapeHtml(this.stripHtml(task.desc))}
+                            </div>
+                        ` : ''}
+
+                        <!-- Footer -->
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            ${task.amount ? `
+                                <div style="display: inline-flex; align-items: center; gap: 4px; background: var(--surface); border: 1px solid var(--border); padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--text-primary);">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                    </svg>
+                                    <span>${window.SmartAgenda.State.get('currentCurrency')}${parseFloat(task.amount).toFixed(2)}</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Chevron -->
+                    <div style="flex-shrink: 0; display: flex; align-items: center;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
                     </div>
                 </div>
             `;
 
+            // Checkbox click handler
+            const checkbox = card.querySelector('.task-checkbox');
+            checkbox.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleTaskCompletion(task);
+            });
+
+            // Card click handler
             card.addEventListener('click', () => this.showTaskModal(task));
 
             return card;
+        },
+
+        toggleTaskCompletion: function(task) {
+            task.completed = !task.completed;
+            window.SmartAgenda.DataManager.update('tasks', task.id, task);
+            this.render();
         },
 
         renderEmptyState: function() {
@@ -289,10 +365,25 @@
                     },
                     {
                         name: 'amount',
-                        label: 'Amount (optional)',
+                        label: 'Τζίρος',
                         type: 'number',
                         placeholder: '0.00',
-                        step: '0.01'
+                        step: '0.01',
+                        width: 'calc(50% - 8px)',
+                        newRow: true
+                    },
+                    {
+                        name: 'profit',
+                        label: 'Κέρδος',
+                        type: 'number',
+                        placeholder: '0.00',
+                        step: '0.01',
+                        width: 'calc(50% - 6px)'
+                    },
+                    {
+                        name: 'profit-note',
+                        type: 'note',
+                        text: 'ℹ️ Αν συμπληρωθεί το Κέρδος, μόνο αυτό θα υπολογίζεται στο ημερολόγιο οικονομικών.'
                     },
                     {
                         name: 'desc',
@@ -329,10 +420,25 @@
                     },
                     {
                         name: 'amount',
-                        label: 'Amount/Weight',
+                        label: 'Τζίρος',
                         type: 'number',
                         placeholder: '0.00',
-                        step: '0.01'
+                        step: '0.01',
+                        width: 'calc(50% - 8px)',
+                        newRow: true
+                    },
+                    {
+                        name: 'profit',
+                        label: 'Κέρδος',
+                        type: 'number',
+                        placeholder: '0.00',
+                        step: '0.01',
+                        width: 'calc(50% - 6px)'
+                    },
+                    {
+                        name: 'profit-note',
+                        type: 'note',
+                        text: 'ℹ️ Αν συμπληρωθεί το Κέρδος, μόνο αυτό θα υπολογίζεται στο ημερολόγιο οικονομικών.'
                     },
                     {
                         name: 'desc',
@@ -365,7 +471,7 @@
             if (isEdit) {
                 // Complete button first when editing
                 buttons.push({
-                    label: task.completed ? 'Mark as Incomplete' : i18n.translate('actions.complete'),
+                    label: task.completed ? i18n.translate('actions.incomplete') : i18n.translate('actions.complete'),
                     type: task.completed ? 'secondary' : 'success',
                     action: 'complete',
                     onClick: (modal) => {
@@ -386,7 +492,13 @@
 
                 // Delete button for editing
                 buttons.push({
-                    label: i18n.translate('actions.delete'),
+                    icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18"></path>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>`,
                     type: 'danger',
                     action: 'delete',
                     onClick: (modal) => this.deleteTask(modal, task.id)
@@ -581,7 +693,7 @@
                                 id="add-checklist-item-btn"
                                 class="btn-primary"
                                 style="padding: 8px 16px; white-space: nowrap;">
-                            ➕ Add
+                            Add
                         </button>
                     </div>
                 </div>
@@ -709,6 +821,24 @@
                 }
             } else {
                 delete values.amount; // Remove empty amounts
+            }
+
+            // Parse profit - convert to number or remove if empty
+            if (values.profit !== undefined && values.profit !== '') {
+                const parsedProfit = parseFloat(values.profit);
+                if (!isNaN(parsedProfit) && parsedProfit >= 0) {
+                    values.profit = parsedProfit;
+                } else {
+                    delete values.profit; // Remove invalid profit
+                }
+            } else {
+                delete values.profit; // Remove empty profit
+            }
+
+            // Validate: profit must be <= amount
+            if (values.profit && values.amount && values.profit > values.amount) {
+                window.SmartAgenda.Toast.error('Το κέρδος δεν μπορεί να είναι μεγαλύτερο από το ποσό!');
+                return;
             }
 
             // Handle standalone vs client-based tasks
@@ -872,7 +1002,7 @@
                     </div>
                     <button type="button" id="manage-notifications-btn"
                             style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
-                        <span>${task ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                        <span>${task ? 'Επεξεργασία' : 'Προσθήκη'}</span>
                     </button>
                 </div>
                 ${notifCount > 0 ? `
@@ -920,7 +1050,7 @@
                             </div>
                             <button type="button" id="manage-notifications-btn"
                                     style="padding: 8px 16px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px;">
-                                <span>${task ? '✏️ Επεξεργασία' : '➕ Προσθήκη'}</span>
+                                <span>${task ? 'Επεξεργασία' : 'Προσθήκη'}</span>
                             </button>
                         `;
 

@@ -13,12 +13,18 @@
     <!-- Quill Editor for Rich Text -->
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
 
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <!-- Firebase SDK - DEPRECATED (kept for backward compatibility) -->
+    <!-- <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
-    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script> -->
+
+    <!-- Google Identity Services (for Google Drive OAuth) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- JSZip for attachment bundling -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
     <!-- Main Styles -->
     <link rel="stylesheet" href="style.css">
 
@@ -46,62 +52,153 @@
                 <span class="hamburger-icon"></span>
             </button>
             <div class="header-title">
-                <span class="header-icon">📊</span>
+                <span class="header-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="20" x2="12" y2="10"></line>
+                        <line x1="18" y1="20" x2="18" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="16"></line>
+                    </svg>
+                </span>
                 <h1 id="header-title">Smart Agenda</h1>
             </div>
+            <button class="header-add-button" id="header-add-button" aria-label="Add" style="display: none;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+            </button>
+            <button class="menu-button" id="map-menu-button" aria-label="Map Menu" style="display: none;">
+                <span style="font-size: 20px; font-weight: bold; color: var(--text-primary);">⋮</span>
+            </button>
         </header>
 
         <!-- Navigation Menu -->
         <nav class="nav-menu" id="nav-menu">
             <div class="nav-header">
                 <div class="user-profile">
-                    <div class="user-avatar" id="user-avatar">👤</div>
+                    <div class="user-avatar" id="user-avatar">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                    </div>
                     <div class="user-info">
                         <div class="user-name" id="user-name">Guest User</div>
                         <div class="user-email" id="user-email">Not signed in</div>
+                    </div>
+                </div>
+                <!-- Backup Status Indicator -->
+                <div id="backup-status-indicator" style="display: none; padding: 8px 16px; margin: 8px 12px 0 12px; background: var(--surface); border-radius: 6px; border: 1px solid var(--border);">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <svg width="16" height="16" viewBox="0 0 48 48">
+                            <path fill="#4CAF50" d="M17 37.2h16L24 52z"/>
+                        </svg>
+                        <div style="flex: 1;">
+                            <div id="backup-status-text" style="font-size: 12px; color: var(--text-secondary);">
+                                Last backup: Never
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
             
             <div class="nav-items">
                 <button class="nav-item active" data-tab="home">
-                    <span class="nav-icon">🏠</span>
+                    <span class="nav-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                        </svg>
+                    </span>
                     <span class="nav-label" data-i18n="nav.home">Home</span>
                 </button>
                 <button class="nav-item" data-tab="clients">
-                    <span class="nav-icon">👥</span>
+                    <span class="nav-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </span>
                     <span class="nav-label" data-i18n="nav.clients">Clients</span>
                 </button>
                 <button class="nav-item" data-tab="appointments">
-                    <span class="nav-icon">📅</span>
+                    <span class="nav-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                    </span>
                     <span class="nav-label" data-i18n="nav.appointments">Appointments</span>
                 </button>
                 <button class="nav-item" data-tab="interactions">
-                    <span class="nav-icon">🤝</span>
+                    <span class="nav-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="8.5" cy="7" r="4"></circle>
+                            <polyline points="17 11 19 13 23 9"></polyline>
+                        </svg>
+                    </span>
                     <span class="nav-label" data-i18n="nav.interactions">Interactions</span>
                 </button>
                 <button class="nav-item" data-tab="tasks">
-                    <span class="nav-icon">✓</span>
+                    <span class="nav-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 11l3 3L22 4"></path>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                        </svg>
+                    </span>
                     <span class="nav-label" data-i18n="nav.tasks">Tasks</span>
                 </button>
                 <button class="nav-item" data-tab="map">
-                    <span class="nav-icon">🗺️</span>
+                    <span class="nav-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon>
+                            <line x1="8" y1="2" x2="8" y2="18"></line>
+                            <line x1="16" y1="6" x2="16" y2="22"></line>
+                        </svg>
+                    </span>
                     <span class="nav-label" data-i18n="nav.map">Map</span>
                 </button>
                 <button class="nav-item" data-tab="finance">
-                    <span class="nav-icon">💰</span>
+                    <span class="nav-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                    </span>
                     <span class="nav-label" data-i18n="nav.finance">Finance</span>
                 </button>
                 <button class="nav-item" data-tab="calendar">
-                    <span class="nav-icon">📆</span>
+                    <span class="nav-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                            <rect x="7" y="14" width="3" height="3"></rect>
+                        </svg>
+                    </span>
                     <span class="nav-label" data-i18n="nav.calendar">Calendar</span>
                 </button>
                 <button class="nav-item" data-tab="advanced">
-                    <span class="nav-icon">⚡</span>
+                    <span class="nav-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                        </svg>
+                    </span>
                     <span class="nav-label" data-i18n="nav.advanced">Advanced</span>
                 </button>
                 <button class="nav-item" data-tab="settings">
-                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </span>
                     <span class="nav-label" data-i18n="nav.settings">Settings</span>
                 </button>
             </div>
@@ -120,8 +217,6 @@
             <!-- Home Tab -->
             <section class="tab-content active" id="home-tab">
                 <div class="dashboard-container">
-                    <h2 class="dashboard-title" data-i18n="dashboard.title">Dashboard</h2>
-                    
                     <!-- Revenue Forecast -->
                     <div class="dashboard-section">
                         <h3 data-i18n="dashboard.revenue_forecast">Revenue Forecast (Next 30 Days)</h3>
@@ -165,29 +260,38 @@
 
             <!-- Clients Tab -->
             <section class="tab-content" id="clients-tab">
-                <div class="tab-header">
+                <div class="search-filter-row">
                     <div class="search-bar">
-                        <span class="search-icon">🔍</span>
+                        <span class="search-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                        </span>
                         <input type="text" id="clients-search" placeholder="Search clients..." data-i18n-placeholder="search.clients">
                         <button class="search-clear-btn" id="clients-search-clear" style="display: none;" aria-label="Clear search">✕</button>
                     </div>
-                    <div class="tab-actions">
-                        <button class="btn-icon" id="clients-sort-btn" aria-label="Sort">
-                            <span>⬍</span>
-                            <span data-i18n="actions.sort">Sort</span>
-                        </button>
-                        <button class="btn-icon" id="clients-filter-btn" aria-label="Filter">
-                            <span>🔽</span>
-                            <span data-i18n="actions.filter">Filters</span>
-                        </button>
-                        <button class="btn-primary" id="clients-add-btn">
-                            <span>+</span>
-                            <span data-i18n="actions.add">Add</span>
-                        </button>
-                    </div>
+                    <button class="btn-icon-only" id="clients-filter-btn" aria-label="Filter">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                    </button>
+                    <button class="btn-icon-only" id="clients-sort-btn" aria-label="Sort">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18"></path>
+                            <path d="M7 12h10"></path>
+                            <path d="M10 18h4"></path>
+                        </svg>
+                    </button>
                 </div>
                 <div id="clients-search-indicator" class="search-result-indicator" style="display: none;">
-                    <span>🔍 Search results</span>
+                    <span style="display: flex; align-items: center; gap: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        Search results
+                    </span>
                 </div>
                 <div class="items-list" id="clients-list">
                     <!-- Client items will be rendered here -->
@@ -196,25 +300,27 @@
 
             <!-- Appointments Tab -->
             <section class="tab-content" id="appointments-tab">
-                <div class="tab-header">
+                <div class="search-filter-row">
                     <div class="search-bar">
-                        <span class="search-icon">🔍</span>
+                        <span class="search-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                        </span>
                         <input type="text" id="appointments-search" placeholder="Search appointments..." data-i18n-placeholder="search.appointments">
                         <button class="search-clear-btn" id="appointments-search-clear" style="display: none;" aria-label="Clear search">✕</button>
                     </div>
-                    <div class="tab-actions">
-                        <button class="btn-icon" id="appointments-filter-btn" aria-label="Filter">
-                            <span>🔽</span>
-                            <span data-i18n="actions.filter">Filters</span>
-                        </button>
-                        <button class="btn-primary" id="appointments-add-btn">
-                            <span>+</span>
-                            <span data-i18n="actions.add">Add</span>
-                        </button>
-                    </div>
+                    <button class="btn-icon-only filter-button" id="appointments-filter-btn" aria-label="Filter">Filter</button>
                 </div>
                 <div id="appointments-search-indicator" class="search-result-indicator" style="display: none;">
-                    <span>🔍 Search results</span>
+                    <span style="display: flex; align-items: center; gap: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        Search results
+                    </span>
                 </div>
                 <div class="items-list" id="appointments-list">
                     <!-- Appointment items will be rendered here -->
@@ -223,25 +329,27 @@
 
             <!-- Tasks Tab -->
             <section class="tab-content" id="tasks-tab">
-                <div class="tab-header">
+                <div class="search-filter-row">
                     <div class="search-bar">
-                        <span class="search-icon">🔍</span>
+                        <span class="search-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                        </span>
                         <input type="text" id="tasks-search" placeholder="Search tasks..." data-i18n-placeholder="search.tasks">
                         <button class="search-clear-btn" id="tasks-search-clear" style="display: none;" aria-label="Clear search">✕</button>
                     </div>
-                    <div class="tab-actions">
-                        <button class="btn-icon" id="tasks-filter-btn" aria-label="Filter">
-                            <span>🔽</span>
-                            <span data-i18n="actions.filter">Filters</span>
-                        </button>
-                        <button class="btn-primary" id="tasks-add-btn">
-                            <span>+</span>
-                            <span data-i18n="actions.add">Add</span>
-                        </button>
-                    </div>
+                    <button class="btn-icon-only filter-button" id="tasks-filter-btn" aria-label="Filter">Filter</button>
                 </div>
                 <div id="tasks-search-indicator" class="search-result-indicator" style="display: none;">
-                    <span>🔍 Search results</span>
+                    <span style="display: flex; align-items: center; gap: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        Search results
+                    </span>
                 </div>
                 <div class="items-list" id="tasks-list">
                     <!-- Task items will be rendered here -->
@@ -250,12 +358,7 @@
 
             <!-- Map Tab -->
             <section class="tab-content" id="map-tab">
-                <div class="tab-header" id="map-header" style="padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface);">
-                    <div id="map-controls-header" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                        <!-- Map controls will be inserted here -->
-                    </div>
-                </div>
-                <div class="map-container">
+                <div class="map-container" style="height: 100%;">
                     <div id="map-loading">
                         <div style="font-size: 48px; margin-bottom: 16px;">🗺️</div>
                         <div style="color: var(--text-secondary); font-size: 14px;">Loading map...</div>
@@ -280,18 +383,22 @@
 
             <!-- Interactions Tab -->
             <section class="tab-content" id="interactions-tab">
-                <div class="tab-header">
+                <div class="search-filter-row">
                     <div class="search-bar">
-                        <span class="search-icon">🔍</span>
+                        <span class="search-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.35-4.35"></path>
+                            </svg>
+                        </span>
                         <input type="text" id="interactions-search" placeholder="Search interactions and clients..." data-i18n-placeholder="search.interactions">
                         <button class="search-clear-btn" id="interactions-search-clear" style="display: none;" aria-label="Clear search">✕</button>
                     </div>
-                    <div class="tab-actions">
-                        <button class="btn-icon" id="interactions-filter-btn" aria-label="Filter">
-                            <span>🔽</span>
-                            <span data-i18n="actions.filter">Filters</span>
-                        </button>
-                    </div>
+                    <button class="btn-icon-only" id="interactions-filter-btn" aria-label="Filter">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                        </svg>
+                    </button>
                 </div>
 
                 <!-- Stats Summary -->
@@ -300,7 +407,13 @@
                 </div>
 
                 <div id="interactions-search-indicator" class="search-result-indicator" style="display: none;">
-                    <span>🔍 Search results</span>
+                    <span style="display: flex; align-items: center; gap: 6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        Search results
+                    </span>
                 </div>
                 <div class="items-list" id="interactions-list">
                     <!-- Interaction items will be rendered here -->
@@ -314,52 +427,104 @@
 
                     <!-- Bulk Operations -->
                     <div class="dashboard-section">
-                        <h3 data-i18n="advanced.bulk_operations">Bulk Operations</h3>
+                        <h3 style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;" data-i18n="advanced.bulk_operations">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            </svg>
+                            Bulk Operations
+                        </h3>
 
-                        <div class="bulk-operations-section">
-                            <h4 style="font-size: 15px; margin-bottom: 12px; color: var(--text-secondary);" data-i18n="advanced.clients">Clients</h4>
-                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                                <button class="btn-secondary" id="bulk-export-clients-btn">
-                                    <span>📤</span>
+                        <div class="bulk-operations-section" style="padding: 20px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border); margin-bottom: 16px;">
+                            <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 16px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;" data-i18n="advanced.clients">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                </svg>
+                                Clients
+                            </h4>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                                <button class="modern-bulk-btn" id="bulk-export-clients-btn">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
                                     <span data-i18n="advanced.export_xls">Export XLS</span>
                                 </button>
-                                <button class="btn-secondary" id="bulk-export-vcf-btn">
-                                    <span>📇</span>
-                                    <span data-i18n="advanced.export_vcf">Export Contacts VCF</span>
+                                <button class="modern-bulk-btn" id="bulk-export-vcf-btn">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                                    </svg>
+                                    <span data-i18n="advanced.export_vcf">Export VCF</span>
                                 </button>
-                                <button class="btn-secondary" id="bulk-import-vcf-btn">
-                                    <span>📥</span>
-                                    <span data-i18n="advanced.import_vcf">Import Contacts VCF</span>
+                                <button class="modern-bulk-btn" id="bulk-import-vcf-btn">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="17 8 12 3 7 8"></polyline>
+                                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                                    </svg>
+                                    <span data-i18n="advanced.import_vcf">Import VCF</span>
                                 </button>
-                                <button class="btn-secondary" id="bulk-import-xls-btn">
-                                    <span>📊</span>
-                                    <span data-i18n="advanced.import_xls">Import XLS Contacts</span>
+                                <button class="modern-bulk-btn" id="bulk-import-xls-btn">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                                        <line x1="9" y1="15" x2="15" y2="15"></line>
+                                    </svg>
+                                    <span data-i18n="advanced.import_xls">Import XLS</span>
                                 </button>
-                                <button class="btn-secondary" id="bulk-delete-clients-btn">
-                                    <span>🗑️</span>
-                                    <span data-i18n="advanced.delete_selected">Delete Selected</span>
+                                <button class="modern-bulk-btn modern-bulk-btn-danger" id="bulk-delete-clients-btn">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
+                                    <span data-i18n="advanced.delete_selected">Delete</span>
                                 </button>
-                                <button class="btn-secondary" id="bulk-update-type-btn">
-                                    <span>🏷️</span>
+                                <button class="modern-bulk-btn" id="bulk-update-type-btn">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                                        <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                                    </svg>
                                     <span data-i18n="advanced.update_type">Update Type</span>
                                 </button>
                             </div>
                             <div id="clients-bulk-list" class="bulk-selection-list" style="margin-top: 16px;"></div>
                         </div>
 
-                        <div class="bulk-operations-section" style="margin-top: 24px;">
-                            <h4 style="font-size: 15px; margin-bottom: 12px; color: var(--text-secondary);" data-i18n="advanced.appointments">Appointments</h4>
-                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                                <button class="btn-secondary" id="bulk-export-appointments-btn">
-                                    <span>📤</span>
+                        <div class="bulk-operations-section" style="padding: 20px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);">
+                            <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 16px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px;" data-i18n="advanced.appointments">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                                Appointments
+                            </h4>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                                <button class="modern-bulk-btn" id="bulk-export-appointments-btn">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
                                     <span data-i18n="advanced.export_xls">Export XLS</span>
                                 </button>
-                                <button class="btn-secondary" id="bulk-update-status-btn">
-                                    <span>✓</span>
+                                <button class="modern-bulk-btn" id="bulk-update-status-btn">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
                                     <span data-i18n="advanced.update_status">Update Status</span>
                                 </button>
-                                <button class="btn-secondary" id="bulk-delete-appointments-btn">
-                                    <span>🗑️</span>
+                                <button class="modern-bulk-btn modern-bulk-btn-danger" id="bulk-delete-appointments-btn" style="grid-column: 1 / -1;">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                    </svg>
                                     <span data-i18n="advanced.delete_selected">Delete Selected</span>
                                 </button>
                             </div>
@@ -381,138 +546,446 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Developer Settings -->
+                    <div class="dashboard-section" style="display: none;">
+                        <h3>Developer Settings</h3>
+                        <div style="padding: 16px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                <div>
+                                    <h4 style="margin: 0 0 4px 0;">Advertisements</h4>
+                                    <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">Enable or disable ads for debugging</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="ads-toggle" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
             <!-- Settings Tab -->
             <section class="tab-content" id="settings-tab">
                 <div class="settings-container">
-                    <div class="settings-section">
-                        <h2 data-i18n="settings.appearance">Appearance</h2>
-                        <div class="setting-item">
-                            <label data-i18n="settings.theme">Theme</label>
-                            <select id="theme-select">
-                                <option value="light" data-i18n="settings.light">Light</option>
-                                <option value="dark" data-i18n="settings.dark">Dark</option>
-                                <option value="kouzmidis">Kouzmidis</option>
-                            </select>
+                    <!-- Settings Header with Back Button -->
+                    <div class="settings-header" id="settings-header" style="display: none;">
+                        <button class="settings-back-btn" id="settings-back-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                        </button>
+                        <div class="settings-header-icon" id="settings-header-icon">
+                            <!-- SVG will be inserted here -->
                         </div>
-                        <div class="setting-item">
-                            <label data-i18n="settings.language">Language</label>
-                            <select id="language-select">
-                                <option value="en">English</option>
-                                <option value="el">Ελληνικά</option>
-                                <option value="ru">Русский</option>
-                            </select>
+                        <div class="settings-header-text">
+                            <h2 class="settings-header-title" id="settings-header-title">Ρυθμίσεις</h2>
+                            <p class="settings-header-subtitle" id="settings-header-subtitle"></p>
                         </div>
-                        <div class="setting-item">
-                            <label data-i18n="settings.currency">Currency</label>
-                            <select id="currency-select">
-                                <option value="€">Euro (€)</option>
-                                <option value="$">US Dollar ($)</option>
-                                <option value="£">British Pound (£)</option>
-                                <option value="₽">Russian Ruble (₽)</option>
-                            </select>
-                        </div>
-                        <div class="setting-item">
-                            <label data-i18n="settings.font_size">Font Size</label>
-                            <select id="font-size-select">
-                                <option value="small" data-i18n="settings.font_small">Small</option>
-                                <option value="medium" data-i18n="settings.font_medium">Medium (Default)</option>
-                                <option value="large" data-i18n="settings.font_large">Large</option>
-                                <option value="extra-large" data-i18n="settings.font_extra_large">Extra Large</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="settings-section">
-                        <h2 data-i18n="notifications.title">Notifications</h2>
-                        <p style="color: var(--text-secondary); margin-bottom: 16px;" data-i18n="notifications.description">Receive reminders before your appointments</p>
-                        <div class="setting-item">
-                            <label for="notifications-enabled" data-i18n="notifications.enabled">Enable Notifications</label>
-                            <select id="notifications-enabled">
-                                <option value="true" data-i18n="settings.enabled">Enabled</option>
-                                <option value="false" data-i18n="settings.disabled">Disabled</option>
-                            </select>
-                        </div>
-                        <div class="setting-item">
-                            <label for="notification-time" data-i18n="notifications.remind_before">Remind me before</label>
-                            <select id="notification-time">
-                                <option value="10" data-i18n="notifications.10min">10 minutes</option>
-                                <option value="30" data-i18n="notifications.30min">30 minutes</option>
-                                <option value="60" data-i18n="notifications.1hour">1 hour</option>
-                                <option value="120" data-i18n="notifications.2hours">2 hours</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="settings-section">
-                        <h2 data-i18n="settings.client_types">Client Types</h2>
-                        <p style="color: var(--text-secondary); margin-bottom: 16px;" data-i18n="settings.client_types_desc">Manage custom client types and colors (up to 6 types)</p>
-                        <div id="client-types-list"></div>
-                        <button class="btn-primary" id="add-client-type-btn" style="margin-top: 12px;">
-                            <span>+</span>
-                            <span data-i18n="settings.add_client_type">Add Client Type</span>
+                        <button class="settings-header-action-btn" id="add-client-type-header-btn" style="display: none;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
                         </button>
                     </div>
 
-                    <div class="settings-section">
-                        <h2 data-i18n="settings.data">Data Management</h2>
-                        <div class="setting-buttons">
-                            <button class="btn-secondary" id="export-data-btn">
-                                <span>💾</span>
-                                <span>Αποθηκευση Backup στα Documents</span>
-                            </button>
-                            <button class="btn-secondary" id="share-backup-btn">
-                                <span>📤</span>
-                                <span>Send Backup</span>
-                            </button>
-                            <button class="btn-secondary" id="import-data-btn">
-                                <span>📥</span>
-                                <span data-i18n="settings.import">Import Data</span>
-                            </button>
-                            <button class="btn-secondary" id="file-manager-btn">
-                                <span>📎</span>
-                                <span>File Manager</span>
-                            </button>
-                            <button class="btn-danger" id="clear-data-btn">
-                                <span>🗑️</span>
-                                <span data-i18n="settings.clear">Clear All Data</span>
-                            </button>
+                    <!-- Settings Categories Menu -->
+                    <div class="settings-categories" id="settings-main-menu">
+                        <!-- Appearance -->
+                        <div class="settings-category-item" id="settings-appearance-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="5"></circle>
+                                <line x1="12" y1="1" x2="12" y2="3"></line>
+                                <line x1="12" y1="21" x2="12" y2="23"></line>
+                                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                                <line x1="1" y1="12" x2="3" y2="12"></line>
+                                <line x1="21" y1="12" x2="23" y2="12"></line>
+                                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                            </svg>
+                            <div class="category-text">
+                                <div class="category-title" data-i18n="settings.appearance">Εμφάνιση</div>
+                                <div class="category-subtitle" data-i18n="category.appearance_subtitle">Θέμα, Γλώσσα, Νόμισμα</div>
+                            </div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.3;">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </div>
+
+                        <!-- Notifications -->
+                        <div class="settings-category-item" id="settings-notifications-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                            </svg>
+                            <div class="category-text">
+                                <div class="category-title" data-i18n="notifications.title">Ειδοποιήσεις</div>
+                                <div class="category-subtitle" data-i18n="notifications.description">Υπενθυμίσεις ραντεβού</div>
+                            </div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.3;">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </div>
+
+                        <!-- Client Types -->
+                        <div class="settings-category-item" id="settings-client-types-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                            <div class="category-text">
+                                <div class="category-title" data-i18n="settings.client_types">Τύποι Πελατών</div>
+                                <div class="category-subtitle" data-i18n="settings.client_types_desc">Προσαρμογή κατηγοριών</div>
+                            </div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.3;">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </div>
+
+                        <!-- Data -->
+                        <div class="settings-category-item" id="settings-data-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                            </svg>
+                            <div class="category-text">
+                                <div class="category-title" data-i18n="settings.data">Δεδομένα</div>
+                                <div class="category-subtitle" data-i18n="category.data_subtitle">Backup & Επαναφορά</div>
+                            </div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.3;">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </div>
+
+                        <!-- Help -->
+                        <div class="settings-category-item" id="settings-help-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                            <div class="category-text">
+                                <div class="category-title" data-i18n="help.title">Βοήθεια</div>
+                                <div class="category-subtitle" data-i18n="help.description">Tutorial & Οδηγίες</div>
+                            </div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.3;">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </div>
+
+                        <!-- About -->
+                        <div class="settings-category-item" id="settings-about-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                            <div class="category-text">
+                                <div class="category-title" data-i18n="settings.about">Πληροφορίες</div>
+                                <div class="category-subtitle" data-i18n="category.about_subtitle">Έκδοση & Developers</div>
+                            </div>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.3;">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
                         </div>
                     </div>
 
-                    <div class="settings-section">
-                        <h2 data-i18n="settings.account">Account</h2>
-                        <div class="setting-buttons" id="auth-buttons">
-                            <button class="btn-primary" id="signin-btn">
-                                <span>🔐</span>
-                                <span data-i18n="settings.signin">Sign In</span>
-                            </button>
-                            <button class="btn-secondary" id="create-account-btn">
-                                <span>✨</span>
-                                <span data-i18n="settings.create_account">Create Account</span>
-                            </button>
-                            <button class="btn-danger" id="signout-btn" style="display: none;">
-                                <span>🚪</span>
-                                <span data-i18n="settings.signout">Sign Out</span>
-                            </button>
+                    <!-- Settings Content Views -->
+                    <div class="settings-content-views">
+                        <!-- Appearance Content -->
+                        <div id="appearance-settings-content" class="settings-view" style="display: none;">
+                            <!-- Theme Mode Section -->
+                            <div style="margin-bottom: 32px;">
+                                <h4 style="font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px;">
+                                    <span data-i18n="settings.theme_mode">Λειτουργία Θέματος</span>
+                                </h4>
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                                    <!-- Light Theme Card -->
+                                    <div class="theme-mode-card" data-theme="light" style="padding: 16px; background: var(--surface); border: 2px solid var(--border); border-radius: 12px; cursor: pointer; transition: all 0.2s ease; text-align: center;">
+                                        <div style="width: 100%; height: 60px; background: linear-gradient(to bottom, #e3e9ef 0%, #e3e9ef 30%, #d5dce5 30%, #d5dce5 100%); border-radius: 8px; margin-bottom: 12px; position: relative; overflow: hidden;">
+                                            <div style="position: absolute; top: 8px; left: 8px; right: 8px; height: 12px; background: #2563eb; border-radius: 4px;"></div>
+                                            <div style="position: absolute; top: 26px; left: 8px; width: 30%; height: 8px; background: #cbd5e1; border-radius: 2px;"></div>
+                                            <div style="position: absolute; top: 26px; right: 8px; width: 20%; height: 8px; background: #cbd5e1; border-radius: 2px;"></div>
+                                        </div>
+                                        <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);" data-i18n="settings.light">Φωτεινό</div>
+                                    </div>
+                                    <!-- Dark Theme Card -->
+                                    <div class="theme-mode-card" data-theme="dark" style="padding: 16px; background: var(--surface); border: 2px solid var(--border); border-radius: 12px; cursor: pointer; transition: all 0.2s ease; text-align: center;">
+                                        <div style="width: 100%; height: 60px; background: linear-gradient(to bottom, #1e293b 0%, #1e293b 30%, #0f172a 30%, #0f172a 100%); border-radius: 8px; margin-bottom: 12px; position: relative; overflow: hidden;">
+                                            <div style="position: absolute; top: 8px; left: 8px; right: 8px; height: 12px; background: #3b82f6; border-radius: 4px;"></div>
+                                            <div style="position: absolute; top: 26px; left: 8px; width: 30%; height: 8px; background: #475569; border-radius: 2px;"></div>
+                                            <div style="position: absolute; top: 26px; right: 8px; width: 20%; height: 8px; background: #475569; border-radius: 2px;"></div>
+                                        </div>
+                                        <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);" data-i18n="settings.dark">Σκούρο</div>
+                                    </div>
+                                    <!-- Modern Theme Card -->
+                                    <div class="theme-mode-card" data-theme="kouzmidis" style="padding: 16px; background: var(--surface); border: 2px solid var(--border); border-radius: 12px; cursor: pointer; transition: all 0.2s ease; text-align: center;">
+                                        <div style="width: 100%; height: 60px; background: linear-gradient(to bottom, #3a3a3a 0%, #3a3a3a 30%, #2d2d2d 30%, #2d2d2d 100%); border-radius: 8px; margin-bottom: 12px; position: relative; overflow: hidden;">
+                                            <div style="position: absolute; top: 8px; left: 8px; right: 8px; height: 12px; background: #FF6600; border-radius: 4px;"></div>
+                                            <div style="position: absolute; top: 26px; left: 8px; width: 30%; height: 8px; background: #555; border-radius: 2px;"></div>
+                                            <div style="position: absolute; top: 26px; right: 8px; width: 20%; height: 8px; background: #555; border-radius: 2px;"></div>
+                                        </div>
+                                        <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);" data-i18n="settings.modern">Μοντέρνο</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Accent Color Section -->
+                            <div style="margin-bottom: 32px;">
+                                <h4 style="font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px;">
+                                    <span data-i18n="settings.accent_color">Χρώμα Έμφασης</span>
+                                </h4>
+                                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;" id="accent-colors-grid">
+                                    <!-- Accent colors will be rendered here -->
+                                </div>
+                            </div>
+
+                            <!-- Hidden select for compatibility -->
+                            <select id="theme-select" style="display: none;">
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                                <option value="kouzmidis">Modern</option>
+                            </select>
+                            <div class="setting-item">
+                                <label>Fancy Graphics</label>
+                                <div class="android-toggle">
+                                    <input type="checkbox" id="fancy-graphics-toggle">
+                                    <span class="android-toggle-slider"></span>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <label data-i18n="settings.language">Language</label>
+                                <select id="language-select">
+                                    <option value="en">English</option>
+                                    <option value="el">Ελληνικά</option>
+                                    <option value="ru">Русский</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label data-i18n="settings.currency">Currency</label>
+                                <select id="currency-select">
+                                    <option value="€">Euro (€)</option>
+                                    <option value="$">US Dollar ($)</option>
+                                    <option value="£">British Pound (£)</option>
+                                    <option value="₽">Russian Ruble (₽)</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label data-i18n="settings.font_size">Font Size</label>
+                                <select id="font-size-select">
+                                    <option value="small" data-i18n="settings.font_small">Small</option>
+                                    <option value="medium" data-i18n="settings.font_medium">Medium (Default)</option>
+                                    <option value="large" data-i18n="settings.font_large">Large</option>
+                                    <option value="extra-large" data-i18n="settings.font_extra_large">Extra Large</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="setting-buttons" style="margin-top: 12px;">
-                            <button class="btn-secondary" id="backup-data-btn" style="display: none;">
-                                <span>☁️</span>
-                                <span data-i18n="settings.backup">Backup to Cloud</span>
-                            </button>
-                            <button class="btn-secondary" id="restore-data-btn" style="display: none;">
-                                <span>📥</span>
-                                <span data-i18n="settings.restore">Restore from Cloud</span>
+
+                        <!-- Colorful Themes Content -->
+                        <div id="colorful-themes-content" class="settings-view" style="display: none;">
+                            <!-- Color Type Selection (Top) -->
+                            <div style="display: flex; gap: 8px; margin-bottom: 20px; background: var(--surface); padding: 4px; border-radius: 10px; border: 1px solid var(--border);">
+                                <button id="color-type-solid" class="color-type-btn active" data-type="solid" style="flex: 1; padding: 12px; border: none; background: var(--primary-color); color: white; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">
+                                    Απλά Χρώματα
+                                </button>
+                                <button id="color-type-gradient" class="color-type-btn" data-type="gradient" style="flex: 1; padding: 12px; border: none; background: transparent; color: var(--text-primary); border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s;">
+                                    Gradients
+                                </button>
+                            </div>
+
+                            <!-- Solid Colors Section -->
+                            <div id="solid-colors-section" style="display: block;">
+                                <h4 style="font-size: 14px; margin-bottom: 12px; color: var(--text-secondary); font-weight: 600;">Επιλέξτε Χρώμα</h4>
+                                <div id="preset-solid-colors-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                                    <!-- Preset solid colors will be rendered here -->
+                                </div>
+                            </div>
+
+                            <!-- Gradient Colors Section -->
+                            <div id="gradient-colors-section" style="display: none;">
+                                <h4 style="font-size: 14px; margin-bottom: 12px; color: var(--text-secondary); font-weight: 600;">Επιλέξτε Gradient</h4>
+                                <div id="preset-gradients-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                                    <!-- Preset gradients will be rendered here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Notifications Content -->
+                        <div id="notifications-settings-content" class="settings-view" style="display: none;">
+                            <div class="setting-item">
+                                <label for="notifications-enabled" data-i18n="notifications.enabled">Enable Notifications</label>
+                                <select id="notifications-enabled">
+                                    <option value="true" data-i18n="settings.enabled">Enabled</option>
+                                    <option value="false" data-i18n="settings.disabled">Disabled</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <label for="notification-time" data-i18n="notifications.remind_before">Remind me before</label>
+                                <select id="notification-time">
+                                    <option value="10" data-i18n="notifications.10min">10 minutes</option>
+                                    <option value="30" data-i18n="notifications.30min">30 minutes</option>
+                                    <option value="60" data-i18n="notifications.1hour">1 hour</option>
+                                    <option value="120" data-i18n="notifications.2hours">2 hours</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Client Types Content -->
+                        <div id="client-types-settings-content" class="settings-view" style="display: none;">
+                            <div id="client-types-list"></div>
+                        </div>
+
+                        <!-- Data Management Content -->
+                        <div id="data-settings-content" class="settings-view" style="display: none;">
+                            <h3 style="font-size: 16px; margin-bottom: 12px;" data-i18n="settings.data">Data Management</h3>
+                            <div class="setting-buttons" style="margin-bottom: 24px;">
+                                <button class="btn-secondary" id="export-data-btn">
+                                    <span data-i18n="data.local_backup">Save Backup to Documents</span>
+                                </button>
+                                <button class="btn-secondary" id="share-backup-btn">
+                                    <span data-i18n="data.send_backup">Send Backup</span>
+                                </button>
+                                <button class="btn-secondary" id="import-data-btn">
+                                    <span data-i18n="settings.import">Import Data</span>
+                                </button>
+                                <button class="btn-secondary" id="file-manager-btn">
+                                    <span>File Manager</span>
+                                </button>
+                                <button class="btn-danger" id="clear-data-btn">
+                                    <span data-i18n="settings.clear">Clear All Data</span>
+                                </button>
+                            </div>
+
+                            <div id="google-drive-backup-section">
+                        <!-- Not Connected State -->
+                        <div id="gdrive-not-connected" style="display: block;">
+                            <div style="padding: 16px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); margin-bottom: 16px;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                    <svg width="40" height="40" viewBox="0 0 87.3 78" style="flex-shrink: 0;">
+                                        <path fill="#0066da" d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"/>
+                                        <path fill="#00ac47" d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z"/>
+                                        <path fill="#ea4335" d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"/>
+                                        <path fill="#00832d" d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"/>
+                                        <path fill="#2684fc" d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"/>
+                                        <path fill="#ffba00" d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"/>
+                                    </svg>
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: 500; margin-bottom: 4px;">Not Connected</div>
+                                        <div style="font-size: 13px; color: var(--text-secondary);">
+                                            Sign in with Google to enable automatic backups
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="btn-primary" id="gdrive-signin-btn" style="width: 100%;">
+                                    <span>Sign In with Google</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Connected State -->
+                        <div id="gdrive-connected" style="display: none;">
+                            <!-- Last Backup Info -->
+                            <div style="padding: 16px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); margin-bottom: 16px;">
+                                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                                    <svg width="40" height="40" viewBox="0 0 87.3 78" style="flex-shrink: 0;">
+                                        <path fill="#0066da" d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z"/>
+                                        <path fill="#00ac47" d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z"/>
+                                        <path fill="#ea4335" d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z"/>
+                                        <path fill="#00832d" d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z"/>
+                                        <path fill="#2684fc" d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"/>
+                                        <path fill="#ffba00" d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z"/>
+                                    </svg>
+                                    <div style="flex: 1;">
+                                        <div id="gdrive-last-backup" style="font-size: 14px; color: var(--text-secondary); margin-bottom: 4px;">
+                                            Last backup: Never
+                                        </div>
+                                        <div id="gdrive-backup-size" style="font-size: 14px; color: var(--text-secondary);">
+                                            Size: 0 MB
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="font-size: 12px; color: var(--text-secondary); padding: 8px; background: var(--background); border-radius: 4px;">
+                                    ℹ️ Data saved to Google Drive is controlled by Google's definitions and practices.
+                                </div>
+                            </div>
+
+                            <!-- Auto Backup Setting -->
+                            <div class="setting-item">
+                                <label for="gdrive-auto-backup">Auto Backup</label>
+                                <select id="gdrive-auto-backup">
+                                    <option value="daily">Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                    <option value="monthly">Monthly</option>
+                                    <option value="off">Off</option>
+                                </select>
+                            </div>
+
+                            <!-- Backup Options -->
+                            <div style="margin: 16px 0;">
+                                <h4 style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">Backup Content</h4>
+                                <div style="display: flex; flex-direction: column; gap: 12px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="checkbox" id="gdrive-backup-documents" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                        <span style="font-size: 14px;">Include Documents & Attachments</span>
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                        <input type="checkbox" id="gdrive-backup-photos" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                        <span style="font-size: 14px;">Include Profile Photos</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Account Info -->
+                            <div style="padding: 12px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); margin-bottom: 16px;">
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">Account for Backup</div>
+                                <div id="gdrive-account-email" style="font-size: 14px; font-weight: 500;">user@gmail.com</div>
+                            </div>
+
+                            <!-- Action Buttons -->
+                            <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                                <button class="btn-secondary" id="gdrive-restore-btn" style="flex: 1;">
+                                    <span>Restore</span>
+                                </button>
+                                <button class="btn-primary" id="gdrive-backup-now-btn" style="flex: 1;">
+                                    <span>Back up now</span>
+                                </button>
+                            </div>
+
+                            <!-- Disconnect Button -->
+                            <button class="btn-danger" id="gdrive-disconnect-btn" style="width: 100%;">
+                                <span>Disconnect Google Drive</span>
                             </button>
                         </div>
                     </div>
+                        </div>
 
-                    <div class="settings-section">
-                        <h2 data-i18n="settings.about">About</h2>
-                        <p class="version-info">Version 2.0.0</p>
+                        <!-- Help Content -->
+                        <div id="help-settings-content" class="settings-view" style="display: none;">
+                            <div class="setting-buttons">
+                                <button class="btn-primary" id="restart-tutorial-btn" style="width: 100%;">
+                                    <span>🎓</span>
+                                    <span data-i18n="help.startTutorial">Start Tutorial</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- About Content -->
+                        <div id="about-settings-content" class="settings-view" style="display: none;">
+                            <div style="padding: 16px; background: var(--surface); border-radius: 8px; line-height: 1.6;">
+                                <p id="about-description" data-i18n="about.description" style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">
+                                    Smart Agenda is a comprehensive customer management (CRM) application that helps you organize appointments, tasks, and client contacts in a simple and modern environment.
+                                </p>
+                                <p id="app-version-display" class="version-info" style="margin-bottom: 16px; font-weight: 500; color: var(--primary-color);">Version 0.9.13 google drive fix</p>
+                                <p style="font-size: 13px; color: var(--text-tertiary);">
+                                    <span data-i18n="about.createdBy">Created in collaboration by</span><br>
+                                    <strong data-i18n="about.developers">George Tsouchnikas (EazyFix) and George Kouzmidis</strong>
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -534,6 +1007,18 @@
     <script src="i18n.js"></script>
     <script src="data-management.js"></script>
     <script src="ui-components.js"></script>
+    <script src="theme-manager.js"></script>
+
+    <!-- Google Drive Cloud Backup Services -->
+    <script src="encryption-service.js"></script>
+    <script src="google-drive-service.js"></script>
+    <script src="performance.js"></script>
+    <script src="backup-service.js"></script>
+    <script src="password-modal.js"></script>
+    <script src="welcome-screen.js"></script>
+    <script src="tutorial.js"></script>
+
+    <!-- Deprecated Firebase Service (for backward compatibility) -->
     <script src="firebase-service.js"></script>
     <script src="admob-service.js"></script>
     <script src="virtual-scroll.js"></script>
@@ -610,5 +1095,6 @@
             });
         }
     </script>
+
 </body>
 </html>

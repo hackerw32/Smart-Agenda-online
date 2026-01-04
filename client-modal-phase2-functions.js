@@ -59,17 +59,13 @@
                                   border-radius: var(--border-radius-sm); background: var(--background);
                                   color: var(--text-primary); font-size: 12px; font-weight: 500;">
 
-                    <button type="button" class="address-type-toggle" data-index="${index}" data-current-type="${type}"
-                            style="flex: 0 0 auto; padding: 4px 8px; background: var(--primary-color); color: white;
-                                   border: none; border-radius: var(--border-radius-sm); cursor: pointer; font-size: 11px;">
-                        ${type === 'map' ? '🗺️ Map' : '📝 Text'}
-                    </button>
-
                     <button type="button" class="remove-address-btn" data-index="${index}"
-                            style="flex: 0 0 28px; padding: 4px; background: #ff4444; color: white;
+                            style="flex: 0 0 auto; padding: 6px 8px; background: #ff4444; color: white;
                                    border: none; border-radius: var(--border-radius-sm); cursor: pointer;
-                                   font-size: 14px; font-weight: bold;">
-                        ✕
+                                   display: flex; align-items: center; justify-content: center;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6"/>
+                        </svg>
                     </button>
                 </div>
 
@@ -168,40 +164,6 @@
                 if (remainingAddresses < 3 && addAddressBtn) {
                     addAddressBtn.style.display = 'flex';
                 }
-            });
-        });
-
-        // Address type toggle buttons
-        modal.querySelectorAll('.address-type-toggle').forEach(btn => {
-            const newBtn = btn.cloneNode(true);
-            btn.parentNode.replaceChild(newBtn, btn);
-
-            newBtn.addEventListener('click', async () => {
-                const index = newBtn.dataset.index;
-                const currentType = newBtn.dataset.currentType;
-                const newType = currentType === 'map' ? 'text' : 'map';
-
-                const confirmed = await window.SmartAgenda.UIComponents.confirm({
-                    title: 'Change Address Type',
-                    message: `Switch to ${newType === 'map' ? 'Map' : 'Text'} address?`,
-                    confirmText: 'Yes, Switch',
-                    cancelText: 'Cancel',
-                    type: 'info'
-                });
-
-                if (!confirmed) return;
-
-                // Update button
-                newBtn.dataset.currentType = newType;
-                newBtn.innerHTML = newType === 'map' ? '🗺️ Map' : '📝 Text';
-
-                // Update content
-                const contentDiv = modal.querySelector(`.address-content[data-index="${index}"]`);
-                contentDiv.innerHTML = newType === 'map' ?
-                    this.buildMapAddressHTML(index) :
-                    this.buildTextAddressHTML(index);
-
-                this.bindAddressButtons(modal);
             });
         });
 

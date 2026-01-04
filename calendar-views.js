@@ -43,6 +43,17 @@
                     if (this.currentView === 'appointments') {
                         this.renderAppointmentsCalendar();
                     }
+                    // Also update finance calendar when appointments change
+                    if (this.currentView === 'finance') {
+                        this.renderFinanceCalendar();
+                    }
+                });
+
+                window.SmartAgenda.EventBus.on('data:tasks:change', () => {
+                    // Update finance calendar when tasks change
+                    if (this.currentView === 'finance') {
+                        this.renderFinanceCalendar();
+                    }
                 });
 
                 window.SmartAgenda.EventBus.on('data:change', () => {
@@ -89,23 +100,65 @@
 
             container.innerHTML = `
                 <div class="gcal-container">
-                    <!-- Compact Stats Row -->
-                    <div class="gcal-compact-stats">
-                        <div class="gcal-stat-item">
-                            <span class="gcal-stat-label">${window.SmartAgenda.I18n.translate('calendar.total')}</span>
-                            <span class="gcal-stat-number">${stats.total}</span>
+                    <!-- Modern Stats Row -->
+                    <div class="gcal-compact-stats" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px;">
+                        <div class="modern-stat-card" style="padding: 16px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 48px; height: 48px; border-radius: 12px; background: var(--primary-color)22; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                                    </svg>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">${window.SmartAgenda.I18n.translate('calendar.total')}</div>
+                                    <div style="font-size: 28px; font-weight: 700; color: var(--text-primary);">${stats.total}</div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="gcal-stat-item" style="color: var(--warning)">
-                            <span class="gcal-stat-label">${window.SmartAgenda.I18n.translate('calendar.pending')}</span>
-                            <span class="gcal-stat-number">${stats.pending}</span>
+                        <div class="modern-stat-card" style="padding: 16px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 48px; height: 48px; border-radius: 12px; background: #f59e0b22; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">${window.SmartAgenda.I18n.translate('calendar.pending')}</div>
+                                    <div style="font-size: 28px; font-weight: 700; color: #f59e0b;">${stats.pending}</div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="gcal-stat-item" style="color: var(--success)">
-                            <span class="gcal-stat-label">${window.SmartAgenda.I18n.translate('calendar.completed')}</span>
-                            <span class="gcal-stat-number">${stats.completed}</span>
+                        <div class="modern-stat-card" style="padding: 16px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 48px; height: 48px; border-radius: 12px; background: #10b98122; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">${window.SmartAgenda.I18n.translate('calendar.completed')}</div>
+                                    <div style="font-size: 28px; font-weight: 700; color: #10b981;">${stats.completed}</div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="gcal-stat-item" style="color: var(--danger)">
-                            <span class="gcal-stat-label">${window.SmartAgenda.I18n.translate('calendar.overdue')}</span>
-                            <span class="gcal-stat-number">${stats.overdue}</span>
+                        <div class="modern-stat-card" style="padding: 16px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 48px; height: 48px; border-radius: 12px; background: #ef444422; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                                    </svg>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">${window.SmartAgenda.I18n.translate('calendar.overdue')}</div>
+                                    <div style="font-size: 28px; font-weight: 700; color: #ef4444;">${stats.overdue}</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -528,16 +581,7 @@
             const resultsContainer = modal.querySelector('#quick-client-results');
             const standaloneBtn = modal.querySelector('#create-standalone-quick');
 
-            let itemsToShow = 25;
             let currentSearchTerm = '';
-
-            // Create Load More button
-            const loadMoreBtn = document.createElement('button');
-            loadMoreBtn.type = 'button';
-            loadMoreBtn.className = 'btn-secondary';
-            loadMoreBtn.textContent = 'Φόρτωση περισσότερων...';
-            loadMoreBtn.style.cssText = 'width: 100%; margin-top: 8px; display: none;';
-            standaloneBtn.parentNode.insertBefore(loadMoreBtn, standaloneBtn);
 
             // Function to render search results
             const renderResults = (query) => {
@@ -545,24 +589,15 @@
                 let filtered;
 
                 if (query) {
-                    // When searching, show all results
+                    // When searching, show all matching results
                     filtered = clients.filter(c => {
                         const nameMatch = c.name && c.name.toLowerCase().includes(query.toLowerCase());
                         const phoneMatch = c.phone && c.phone.includes(query);
                         return nameMatch || phoneMatch;
                     });
-                    loadMoreBtn.style.display = 'none';
                 } else {
-                    // When not searching, apply pagination
-                    filtered = clients.slice(0, itemsToShow);
-
-                    // Show/hide Load More button
-                    if (clients.length > itemsToShow) {
-                        loadMoreBtn.style.display = 'block';
-                        loadMoreBtn.textContent = `Φόρτωση περισσότερων (${clients.length - itemsToShow} remaining)`;
-                    } else {
-                        loadMoreBtn.style.display = 'none';
-                    }
+                    // When not searching, show ALL clients (no pagination)
+                    filtered = clients;
                 }
 
                 if (filtered.length === 0) {
@@ -599,12 +634,6 @@
                     });
                 });
             };
-
-            // Load More button click
-            loadMoreBtn.addEventListener('click', () => {
-                itemsToShow += 25;
-                renderResults(currentSearchTerm);
-            });
 
             // Initial render
             renderResults('');
@@ -1178,46 +1207,87 @@
             const currency = window.SmartAgenda.State.get('currentCurrency') || '€';
 
             container.innerHTML = `
-                <div class="calendar-container">
-                    <div class="calendar-header">
-                        <div class="calendar-nav">
+                <div class="gcal-container">
+                    <!-- Modern Stats Row -->
+                    <div class="gcal-compact-stats" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px;">
+                        <div class="modern-stat-card" style="padding: 16px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 48px; height: 48px; border-radius: 12px; background: var(--primary-color)22; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2">
+                                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                    </svg>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Τζίρος</div>
+                                    <div style="font-size: 24px; font-weight: 700; color: var(--primary-color);">${currency}${stats.revenue.toFixed(2)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modern-stat-card" style="padding: 16px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 48px; height: 48px; border-radius: 12px; background: #10b98122; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+                                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Κέρδος</div>
+                                    <div style="font-size: 24px; font-weight: 700; color: #10b981;">${currency}${stats.profit.toFixed(2)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modern-stat-card" style="padding: 16px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 48px; height: 48px; border-radius: 12px; background: #f59e0b22; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <polyline points="12 6 12 12 16 14"></polyline>
+                                    </svg>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Εκρεμή</div>
+                                    <div style="font-size: 28px; font-weight: 700; color: #f59e0b;">${stats.pendingCount}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modern-stat-card" style="padding: 16px; background: var(--surface); border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <div style="width: 48px; height: 48px; border-radius: 12px; background: var(--text-tertiary)22; display: flex; align-items: center; justify-content: center;">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2">
+                                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                                    </svg>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Δυνητικά</div>
+                                    <div style="font-size: 24px; font-weight: 700; color: var(--text-tertiary);">${currency}${stats.potentialRevenue.toFixed(2)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Compact Calendar Row -->
+                    <div class="gcal-compact-calendar">
+                        <div class="gcal-calendar-nav">
                             <button class="btn-icon" id="prev-month-fin">‹</button>
-                            <h2 class="calendar-title" id="calendar-month-fin">${this.getMonthYearString()}</h2>
+                            <h2 class="gcal-month-title" id="calendar-month-fin">${this.getMonthYearString()}</h2>
                             <button class="btn-icon" id="next-month-fin">›</button>
                         </div>
-                    </div>
-
-                    <div class="calendar-stats">
-                        <div class="stat-card">
-                            <div class="stat-number" style="color: var(--success)">${currency}${stats.total.toFixed(2)}</div>
-                            <div class="stat-label">${window.SmartAgenda.I18n.translate('calendar.total_revenue')}</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number">${stats.count}</div>
-                            <div class="stat-label">${window.SmartAgenda.I18n.translate('calendar.completed')}</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number" style="color: var(--warning)">${stats.pending}</div>
-                            <div class="stat-label">${window.SmartAgenda.I18n.translate('calendar.pending')}</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number" style="color: var(--text-tertiary)">${currency}${stats.potentialRevenue.toFixed(2)}</div>
-                            <div class="stat-label">${window.SmartAgenda.I18n.translate('calendar.potential')}</div>
-                        </div>
-                    </div>
-
-                    <div class="calendar-grid">
-                        <div class="calendar-weekdays">
-                            <div class="weekday">Sun</div>
-                            <div class="weekday">Mon</div>
-                            <div class="weekday">Tue</div>
-                            <div class="weekday">Wed</div>
-                            <div class="weekday">Thu</div>
-                            <div class="weekday">Fri</div>
-                            <div class="weekday">Sat</div>
-                        </div>
-                        <div class="calendar-days" id="calendar-days-fin">
-                            ${this.renderCalendarDays(revenueByDate, 'finance')}
+                        <div class="gcal-mini-grid">
+                            <div class="gcal-mini-weekdays">
+                                <div class="gcal-mini-weekday">S</div>
+                                <div class="gcal-mini-weekday">M</div>
+                                <div class="gcal-mini-weekday">T</div>
+                                <div class="gcal-mini-weekday">W</div>
+                                <div class="gcal-mini-weekday">T</div>
+                                <div class="gcal-mini-weekday">F</div>
+                                <div class="gcal-mini-weekday">S</div>
+                            </div>
+                            <div class="gcal-mini-days" id="calendar-days-fin">
+                                ${this.renderCompactCalendarDays(revenueByDate, 'finance')}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1246,8 +1316,8 @@
                 this.renderFinanceCalendar();
             });
 
-            // Day click events
-            document.querySelectorAll('.calendar-day').forEach(day => {
+            // Day click events - use gcal-mini-day instead of calendar-day
+            document.querySelectorAll('.gcal-mini-day:not(.empty)').forEach(day => {
                 day.addEventListener('click', () => {
                     const dateKey = day.dataset.date;
                     if (dateKey && revenueByDate[dateKey]) {
@@ -1273,8 +1343,12 @@
                     <h3>${dateStr}</h3>
                     <div class="day-revenue-summary">
                         <div class="revenue-stat">
-                            <span>Revenue Received:</span>
-                            <strong style="color: var(--success)">${currency}${data.total.toFixed(2)}</strong>
+                            <span>Τζίρος:</span>
+                            <strong style="color: var(--primary-color)">${currency}${data.revenue.toFixed(2)}</strong>
+                        </div>
+                        <div class="revenue-stat">
+                            <span>Κέρδος:</span>
+                            <strong style="color: var(--success)">${currency}${data.profit.toFixed(2)}</strong>
                         </div>
                         <div class="revenue-stat">
                             <span>Transactions:</span>
@@ -1347,7 +1421,7 @@
         // Compact Calendar Rendering
         // ============================================
 
-        renderCompactCalendarDays: function(appointmentsByDate) {
+        renderCompactCalendarDays: function(data, mode = 'appointments') {
             const firstDay = new Date(this.currentYear, this.currentMonth, 1);
             const lastDay = new Date(this.currentYear, this.currentMonth + 1, 0);
             const daysInMonth = lastDay.getDate();
@@ -1359,6 +1433,7 @@
             const selectedDate = this.selectedDate ? new Date(this.selectedDate) : null;
             if (selectedDate) selectedDate.setHours(0, 0, 0, 0);
 
+            const currency = window.SmartAgenda.State.get('currentCurrency') || '€';
             let html = '';
 
             // Empty cells before first day
@@ -1376,38 +1451,77 @@
                 const isToday = date.getTime() === today.getTime();
                 const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
 
-                const appointments = appointmentsByDate[dateKey] || [];
-                const count = appointments.length;
-
                 let dayClass = 'gcal-mini-day';
                 if (isToday) dayClass += ' today';
                 if (isSelected) dayClass += ' selected';
-                if (count > 0) dayClass += ' has-events';
 
-                // Create preview text (first 5 appointments in portrait, all in landscape)
                 let previewHtml = '';
-                if (count > 0) {
-                    const isLandscape = window.matchMedia('(orientation: landscape)').matches;
-                    const maxPreview = isLandscape ? appointments.length : Math.min(5, appointments.length);
+                let count = 0;
 
-                    const previews = appointments.slice(0, maxPreview).map(apt => {
-                        const name = apt.clientName || 'Untitled';
-                        // Return full name - CSS will handle text overflow
-                        return name;
-                    });
+                if (mode === 'finance') {
+                    // Finance mode - show revenue/profit
+                    const revenueData = data[dateKey];
+                    if (revenueData && (revenueData.revenue > 0 || revenueData.profit > 0)) {
+                        dayClass += ' has-events';
 
-                    previewHtml = `
-                        <div class="gcal-mini-preview">
-                            ${previews.map(p => `<div class="gcal-preview-item">${this.escapeHtml(p)}</div>`).join('')}
-                        </div>
-                    `;
+                        // Check if revenue and profit are the same
+                        const revenueRounded = Math.round(revenueData.revenue * 100) / 100;
+                        const profitRounded = Math.round(revenueData.profit * 100) / 100;
+                        const areSame = Math.abs(revenueRounded - profitRounded) < 0.01;
+
+                        if (areSame) {
+                            // Show only profit with success color
+                            count = revenueData.profit;
+                            previewHtml = `
+                                <div class="gcal-mini-preview">
+                                    <div class="gcal-preview-item" style="font-weight: 600; color: var(--success); font-size: 11px;">
+                                        ${currency}${revenueData.profit.toFixed(0)}
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            // Show both vertically - revenue (primary) then profit (success)
+                            count = revenueData.revenue;
+                            previewHtml = `
+                                <div class="gcal-mini-preview" style="display: flex; flex-direction: column; gap: 1px;">
+                                    <div class="gcal-preview-item" style="font-weight: 600; color: var(--primary-color); font-size: 10px;">
+                                        ${currency}${revenueData.revenue.toFixed(0)}
+                                    </div>
+                                    <div class="gcal-preview-item" style="font-weight: 600; color: var(--success); font-size: 10px;">
+                                        ${currency}${revenueData.profit.toFixed(0)}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    }
+                } else {
+                    // Appointments mode
+                    const appointments = data[dateKey] || [];
+                    count = appointments.length;
+                    if (count > 0) {
+                        dayClass += ' has-events';
+
+                        const isLandscape = window.matchMedia('(orientation: landscape)').matches;
+                        const maxPreview = isLandscape ? appointments.length : Math.min(5, appointments.length);
+
+                        const previews = appointments.slice(0, maxPreview).map(apt => {
+                            const name = apt.clientName || 'Untitled';
+                            return name;
+                        });
+
+                        previewHtml = `
+                            <div class="gcal-mini-preview">
+                                ${previews.map(p => `<div class="gcal-preview-item">${this.escapeHtml(p)}</div>`).join('')}
+                            </div>
+                        `;
+                    }
                 }
 
                 html += `
                     <div class="${dayClass}" data-date="${dateKey}">
                         <div class="gcal-mini-day-header">
                             <span class="gcal-mini-day-num">${day}</span>
-                            ${count > 0 ? `<span class="gcal-mini-count">${count}</span>` : ''}
+                            ${mode !== 'finance' && count > 0 ? `<span class="gcal-mini-count">${count}</span>` : ''}
                         </div>
                         ${previewHtml}
                     </div>
@@ -1606,8 +1720,14 @@
                     dataDisplay = `<div class="${indicatorClass}">${count}</div>`;
                 } else if (viewType === 'finance' && data) {
                     const currency = window.SmartAgenda.State.get('currentCurrency') || '€';
-                    const amount = data.total;
-                    dataDisplay = `<div class="finance-amount">${currency}${amount.toFixed(0)}</div>`;
+                    const revenue = data.revenue || 0;
+                    const profit = data.profit || 0;
+                    dataDisplay = `
+                        <div class="finance-amount">
+                            <div style="font-size: 10px; font-weight: 600; color: var(--primary-color);">${currency}${revenue.toFixed(0)}</div>
+                            <div style="font-size: 11px; font-weight: 700; color: var(--success);">${currency}${profit.toFixed(0)}</div>
+                        </div>
+                    `;
                 }
 
                 html += `
@@ -1687,7 +1807,7 @@
                     const dateKey = `${year}-${month}-${day}`;
 
                     if (!grouped[dateKey]) {
-                        grouped[dateKey] = { total: 0, completed: 0, pending: 0, items: [] };
+                        grouped[dateKey] = { total: 0, revenue: 0, profit: 0, completed: 0, pending: 0, items: [] };
                     }
 
                     // Calculate amount - use amountPaid for partial payments
@@ -1698,7 +1818,12 @@
                         amount = parseFloat(apt.amountPaid) || 0;
                     }
 
-                    grouped[dateKey].total += amount;
+                    // Calculate profit - use profit if exists, otherwise amount
+                    const profit = apt.profit ? parseFloat(apt.profit) : amount;
+
+                    grouped[dateKey].total += amount;  // Keep for backward compatibility
+                    grouped[dateKey].revenue += parseFloat(apt.amount) || 0;  // Always use full amount for revenue
+                    grouped[dateKey].profit += profit || 0;  // Use profit if exists
                     grouped[dateKey].completed += amount;
                     grouped[dateKey].items.push({ ...apt, type: 'appointment' });
                 }
@@ -1721,11 +1846,16 @@
                     const dateKey = `${year}-${month}-${day}`;
 
                     if (!grouped[dateKey]) {
-                        grouped[dateKey] = { total: 0, completed: 0, pending: 0, items: [] };
+                        grouped[dateKey] = { total: 0, revenue: 0, profit: 0, completed: 0, pending: 0, items: [] };
                     }
 
                     const amount = parseFloat(task.amount);
-                    grouped[dateKey].total += amount;
+                    // Calculate profit - use profit if exists, otherwise amount
+                    const profit = task.profit ? parseFloat(task.profit) : amount;
+
+                    grouped[dateKey].total += amount;  // Keep for backward compatibility
+                    grouped[dateKey].revenue += amount;  // Always use amount for revenue
+                    grouped[dateKey].profit += profit || 0;  // Use profit if exists
                     grouped[dateKey].completed += amount;
                     grouped[dateKey].items.push({ ...task, type: 'task' });
                 }
@@ -1757,10 +1887,10 @@
             const monthStart = new Date(this.currentYear, this.currentMonth, 1);
             const monthEnd = new Date(this.currentYear, this.currentMonth + 1, 0);
 
-            let total = 0; // Completed revenue only
-            let potentialRevenue = 0; // Pending revenue
-            let completedCount = 0;
-            let pendingCount = 0;
+            let revenue = 0; // Τζίρος - completed/paid amounts
+            let profit = 0; // Κέρδος - completed/paid profit
+            let pendingCount = 0; // Εκρεμή - count of pending items (including partial)
+            let potentialRevenue = 0; // Δυνητικά - potential pending revenue
 
             // Process appointments
             appointments.forEach(apt => {
@@ -1768,18 +1898,27 @@
                 const date = this.parseLocalDate(apt.date);
                 if (date >= monthStart && date <= monthEnd) {
                     const amount = parseFloat(apt.amount);
-                    // Count as completed if marked completed OR payment status is paid
+
                     if (apt.completed || apt.paid === 'paid') {
-                        total += amount;
-                        completedCount++;
+                        // Fully paid
+                        revenue += amount;
+                        const profitValue = apt.profit ? parseFloat(apt.profit) : amount;
+                        profit += profitValue;
                     } else if (apt.paid === 'partial') {
-                        // For partial payments, add paid amount to total and remaining to potential
+                        // Partially paid
                         const amountPaid = parseFloat(apt.amountPaid) || 0;
                         const remaining = amount - amountPaid;
-                        total += amountPaid;
+
+                        revenue += amountPaid;
                         potentialRevenue += remaining;
-                        completedCount++; // Count as completed for stats
+                        pendingCount++; // Count partial as pending
+
+                        // Calculate proportional profit
+                        const fullProfit = apt.profit ? parseFloat(apt.profit) : amount;
+                        const proportionalProfit = (fullProfit / amount) * amountPaid;
+                        profit += proportionalProfit;
                     } else {
+                        // Unpaid
                         potentialRevenue += amount;
                         pendingCount++;
                     }
@@ -1789,16 +1928,32 @@
             // Process tasks
             tasks.forEach(task => {
                 if (!task.amount) return;
-                if (!task.date) return; // Skip tasks without a date
+                if (!task.date) return;
 
                 const date = new Date(task.date);
                 if (date >= monthStart && date <= monthEnd) {
                     const amount = parseFloat(task.amount);
-                    // Count as completed if marked completed OR payment status is paid
+
                     if (task.completed || task.paid === 'paid') {
-                        total += amount;
-                        completedCount++;
+                        // Fully paid
+                        revenue += amount;
+                        const profitValue = task.profit ? parseFloat(task.profit) : amount;
+                        profit += profitValue;
+                    } else if (task.paid === 'partial') {
+                        // Partially paid
+                        const amountPaid = parseFloat(task.amountPaid) || 0;
+                        const remaining = amount - amountPaid;
+
+                        revenue += amountPaid;
+                        potentialRevenue += remaining;
+                        pendingCount++;
+
+                        // Calculate proportional profit
+                        const fullProfit = task.profit ? parseFloat(task.profit) : amount;
+                        const proportionalProfit = (fullProfit / amount) * amountPaid;
+                        profit += proportionalProfit;
                     } else {
+                        // Unpaid
                         potentialRevenue += amount;
                         pendingCount++;
                     }
@@ -1806,10 +1961,10 @@
             });
 
             return {
-                total, // Completed revenue
-                count: completedCount,
-                pending: pendingCount,
-                potentialRevenue
+                revenue,           // Τζίρος
+                profit,            // Κέρδος
+                pendingCount,      // Εκρεμή (αριθμός)
+                potentialRevenue   // Δυνητικά (ποσό)
             };
         },
 

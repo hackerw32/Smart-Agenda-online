@@ -25,6 +25,9 @@
     const DEFAULT_ZOOM = 11;
     const NEARBY_RADIUS_KM = 5; // Default radius for nearby search
 
+    // Map ID for Google Maps
+    const MAP_ID = 'de8670acc4bd10699eb9ccb1';  // Light theme map
+
     // Marker colors for different client types
     const MARKER_COLORS = {
         existing: '#4CAF50',
@@ -42,36 +45,20 @@
         // Core Google Maps objects
         map: null,
         geocoder: null,
-        placesService: null,
-        directionsService: null,
-        directionsRenderer: null,
 
         // Markers and overlays
         clientMarkers: [],
-        appointmentMarkers: [],
         userLocationMarker: null,
         selectedMarkers: [],
-
-        // Route planning
-        routeWaypoints: [],
-        activeRoute: null,
 
         // UI state
         infoWindow: null,
         isInitialized: false,
+        isLoadingMarkers: false, // Flag to prevent concurrent marker refreshes
         currentFilter: 'all', // 'all' or array of type IDs
         currentTypeFilter: 'all', // For filtering client types on map (deprecated, using currentFilter now)
         filterMode: 'or', // 'or', 'and', or 'or-and' - how to combine multiple filters
 
-        // Offline cache
-        offlineCache: {
-            enabled: false,
-            tiles: new Map(),
-            lastUpdate: null
-        },
-
-        // Check-in history
-        checkIns: [],
 
         // =============================================================================
         // INITIALIZATION
@@ -82,9 +69,6 @@
 
             // Load Google Maps API
             this.loadGoogleMapsAPI();
-
-            // Load check-in history from localStorage
-            this.loadCheckInHistory();
 
             // Listen for tab changes
             if (window.SmartAgenda) {
@@ -109,29 +93,61 @@
                         this.refreshClientMarkers(); // Refresh client markers to update appointment counts
                     }
                 });
+
+                // Listen for language changes - reload map with new language
+                window.SmartAgenda.EventBus.on('language:change', (newLanguage) => {
+                    console.log(`🌍 Language changed to: ${newLanguage}, reloading map...`);
+                    this.reloadMapWithLanguage(newLanguage);
+                });
             }
 
             console.log('✅ Maps module loaded');
         },
 
-        loadGoogleMapsAPI: function() {
+        loadGoogleMapsAPI: async function() {
             // Check if already loaded
             if (window.google && window.google.maps) {
                 console.log('[Maps] Google Maps API already loaded');
                 window.geocoder = new google.maps.Geocoder();
-                return;
+                return Promise.resolve();
             }
 
-            console.log('[Maps] Loading Google Maps API...');
+            console.log('[Maps] Loading Google Maps API (Modern Async)...');
 
-            // Create script element
-            const script = document.createElement('script');
-            script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places,geometry&loading=async&callback=initializeGoogleMaps`;
-            script.async = true;
-            script.defer = true;
-            script.onerror = (error) => {
-                console.error('❌ Failed to load Google Maps API:', error);
-                window.SmartAgenda.Toast.error('Failed to load maps - check internet connection');
+            try {
+                // Get current language from localStorage
+                const appLanguage = localStorage.getItem('language') || 'en';
+                // Map app language codes to Google Maps language codes
+                const languageMap = {
+                    'en': 'en',
+                    'el': 'el',  // Greek
+                    'ru': 'ru'   // Russian
+                };
+                const mapsLanguage = languageMap[appLanguage] || 'en';
+
+                // Modern promise-based loading
+                const script = document.createElement('script');
+                script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=marker,geometry&loading=async&v=weekly&language=${mapsLanguage}`;
+                script.async = true;
+                script.defer = true;
+
+                const loadPromise = new Promise((resolve, reject) => {
+                    script.onload = () => {
+                        console.log('✅ Google Maps API loaded successfully');
+                        window.geocoder = new google.maps.Geocoder();
+                        resolve();
+                    };
+                    script.onerror = (error) => {
+                        console.error('❌ Failed to load Google Maps API:', error);
+                        reject(error);
+                    };
+                });
+
+                document.head.appendChild(script);
+                await loadPromise;
+            } catch (error) {
+                console.error('❌ Google Maps loading error:', error);
+                window.SmartAgenda?.Toast?.error('Failed to load maps - check internet connection');
 
                 // Update loading indicator
                 const mapLoading = document.getElementById('map-loading');
@@ -144,10 +160,8 @@
                         </div>
                     `;
                 }
-            };
-
-            document.head.appendChild(script);
-            console.log('[Maps] Google Maps API script tag added to page');
+                throw error;
+            }
         },
 
         initializeMap: function() {
@@ -188,21 +202,23 @@
             console.log('[Maps] Creating map with center:', center, 'zoom:', zoom);
 
             try {
-                // Create map
+                // Create map with Map ID (enables Advanced Markers and Vector maps)
                 this.map = new google.maps.Map(mapElement, {
+                    mapId: MAP_ID,
                     center: center,
                     zoom: zoom,
-                    mapTypeId: google.maps.MapTypeId.ROADMAP,
-                    styles: this.getMapStyles(),
-                    zoomControl: true,
-                    mapTypeControl: true,
+                    zoomControl: false,        // Removed zoom +/- buttons
+                    mapTypeControl: false,     // Removed Map/Satellite buttons
                     scaleControl: true,
                     streetViewControl: false,
-                    rotateControl: false,
-                    fullscreenControl: true,
-                    gestureHandling: 'greedy'
+                    rotateControl: false,      // Disable rotate control
+                    fullscreenControl: false,  // Removed fullscreen button
+                    gestureHandling: 'greedy',
+                    tilt: 0,                   // Disable tilt/skew (force flat map)
+                    heading: 0,                // Disable rotation (force north-up)
+                    disableDefaultUI: false
                 });
-                console.log('[Maps] Google Map instance created successfully');
+                console.log('[Maps] Google Map instance created successfully with Map ID');
             } catch (error) {
                 console.error('❌ Failed to create map instance:', error);
                 if (mapLoading) {
@@ -217,17 +233,10 @@
 
             // Initialize services
             this.geocoder = new google.maps.Geocoder();
-            this.placesService = new google.maps.places.PlacesService(this.map);
-            this.directionsService = new google.maps.DirectionsService();
-            this.directionsRenderer = new google.maps.DirectionsRenderer({
-                map: this.map,
-                suppressMarkers: false,
-                polylineOptions: {
-                    strokeColor: MARKER_COLORS.route,
-                    strokeWeight: 4
-                }
-            });
             this.infoWindow = new google.maps.InfoWindow();
+
+            // Hide native InfoWindow header and X button with CSS
+            this.addInfoWindowStyles();
 
             // Export to window for global access
             window.map = this.map;
@@ -241,8 +250,6 @@
 
             // Load markers
             this.refreshClientMarkers();
-            // Don't load separate appointment markers - they're shown in client markers instead
-            // this.refreshAppointmentMarkers();
 
             // Try to show user location
             this.showUserLocation();
@@ -266,6 +273,39 @@
             console.log('✅ Map initialized successfully');
         },
 
+        addInfoWindowStyles: function() {
+            // Add CSS to hide native InfoWindow header and close button
+            if (!document.getElementById('custom-infowindow-styles')) {
+                const style = document.createElement('style');
+                style.id = 'custom-infowindow-styles';
+                style.textContent = `
+                    /* Hide native InfoWindow close button */
+                    .gm-style-iw-chr {
+                        display: none !important;
+                    }
+
+                    /* Remove padding from InfoWindow container */
+                    .gm-style .gm-style-iw-c {
+                        padding: 0 !important;
+                        border-radius: 10px !important;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+                    }
+
+                    /* Remove default scrolling container constraints */
+                    .gm-style .gm-style-iw-d {
+                        overflow: auto !important;
+                        max-height: none !important;
+                    }
+
+                    /* Hide native close button (backup selector) */
+                    .gm-style-iw button[aria-label="Close"] {
+                        display: none !important;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        },
+
         setupMapListeners: function() {
             // Save map position on move
             let saveTimeout;
@@ -280,37 +320,146 @@
             });
         },
 
+
         addMapControls: function() {
-            const controlsHeader = document.getElementById('map-controls-header');
-            if (!controlsHeader) return;
+            // Create dropdown menu
+            this.createMapDropdown();
 
-            // Clear existing controls
-            controlsHeader.innerHTML = '';
+            // Setup map menu button
+            const mapMenuButton = document.getElementById('map-menu-button');
+            if (mapMenuButton) {
+                mapMenuButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleMapDropdown();
+                });
+            }
 
-            // Search Nearby Button
-            const nearbyBtn = this.createTopControlButton('🔍', 'Search Nearby');
-            nearbyBtn.addEventListener('click', () => this.showNearbySearch());
-            controlsHeader.appendChild(nearbyBtn);
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                const dropdown = document.getElementById('map-dropdown-menu');
+                if (dropdown && !dropdown.contains(e.target)) {
+                    this.hideMapDropdown();
+                }
+            });
+        },
 
-            // Route Planning Button
-            const routeBtn = this.createTopControlButtonWithLabel('🚗', 'Optimize Route', 'map.route_button');
-            routeBtn.addEventListener('click', () => this.showRoutePlanner());
-            controlsHeader.appendChild(routeBtn);
+        createMapDropdown: function() {
+            // Remove existing dropdown if any
+            const existingDropdown = document.getElementById('map-dropdown-menu');
+            if (existingDropdown) {
+                existingDropdown.remove();
+            }
 
-            // Today's Appointments Button
-            const appointmentsBtn = this.createTopControlButtonWithLabel('📅', 'Today\'s Appointments', 'map.appointments_button');
-            appointmentsBtn.addEventListener('click', () => this.showTodaysAppointments());
-            controlsHeader.appendChild(appointmentsBtn);
+            // Create dropdown menu
+            const dropdown = document.createElement('div');
+            dropdown.id = 'map-dropdown-menu';
+            dropdown.className = 'map-dropdown-menu';
+            dropdown.style.display = 'none';
 
-            // Client Type Filter Button
-            const filterBtn = this.createTopControlButtonWithLabel('🔽', 'Client Filters', 'map.filter_button');
-            filterBtn.addEventListener('click', () => this.showMapFilter());
-            controlsHeader.appendChild(filterBtn);
+            dropdown.innerHTML = `
+                <div class="map-dropdown-item" data-action="search">
+                    <span class="map-dropdown-icon">🔍</span>
+                    <span class="map-dropdown-label">Αναζήτηση</span>
+                </div>
+                <div class="map-dropdown-item" data-action="appointments">
+                    <span class="map-dropdown-icon">📅</span>
+                    <span class="map-dropdown-label">Ραντεβού</span>
+                </div>
+                <div class="map-dropdown-item" data-action="filters">
+                    <span class="map-dropdown-icon">🔽</span>
+                    <span class="map-dropdown-label">Φίλτρα</span>
+                </div>
+                <div class="map-dropdown-item" data-action="location">
+                    <span class="map-dropdown-icon">📍</span>
+                    <span class="map-dropdown-label">Η τοποθεσία μου</span>
+                </div>
+                <div class="map-dropdown-item" data-action="reset-view">
+                    <span class="map-dropdown-icon">🧭</span>
+                    <span class="map-dropdown-label">Επαναφορά Προβολής</span>
+                </div>
+            `;
 
-            // GPS Button
-            const gpsBtn = this.createTopControlButtonWithLabel('📍', 'My Location', 'map.gps_button');
-            gpsBtn.addEventListener('click', () => this.centerOnUserLocation());
-            controlsHeader.appendChild(gpsBtn);
+            // Add event listeners
+            dropdown.querySelectorAll('.map-dropdown-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    const action = item.getAttribute('data-action');
+                    this.handleDropdownAction(action);
+                    this.hideMapDropdown();
+                });
+            });
+
+            document.body.appendChild(dropdown);
+        },
+
+        toggleMapDropdown: function() {
+            const dropdown = document.getElementById('map-dropdown-menu');
+            const button = document.getElementById('map-menu-button');
+
+            if (!dropdown || !button) return;
+
+            if (dropdown.style.display === 'none') {
+                // Position dropdown below button
+                const buttonRect = button.getBoundingClientRect();
+                dropdown.style.top = (buttonRect.bottom + 5) + 'px';
+                dropdown.style.right = '10px';
+                dropdown.style.display = 'block';
+
+                // Animate in
+                setTimeout(() => {
+                    dropdown.style.opacity = '1';
+                    dropdown.style.transform = 'translateY(0)';
+                }, 10);
+            } else {
+                this.hideMapDropdown();
+            }
+        },
+
+        hideMapDropdown: function() {
+            const dropdown = document.getElementById('map-dropdown-menu');
+            if (!dropdown) return;
+
+            dropdown.style.opacity = '0';
+            dropdown.style.transform = 'translateY(-10px)';
+            setTimeout(() => {
+                dropdown.style.display = 'none';
+            }, 200);
+        },
+
+        handleDropdownAction: function(action) {
+            switch(action) {
+                case 'search':
+                    this.showNearbySearch();
+                    break;
+                case 'appointments':
+                    this.showTodaysAppointments();
+                    break;
+                case 'filters':
+                    this.showMapFilter();
+                    break;
+                case 'location':
+                    this.centerOnUserLocation();
+                    break;
+                case 'reset-view':
+                    this.resetMapView();
+                    break;
+            }
+        },
+
+        resetMapView: function() {
+            if (!this.map) return;
+
+            // Reset tilt (make map flat)
+            this.map.setTilt(0);
+
+            // Reset heading (north-up)
+            this.map.setHeading(0);
+
+            console.log('🧭 Map view reset - tilt and rotation restored to default');
+
+            // Show toast notification
+            if (window.SmartAgenda && window.SmartAgenda.Toast) {
+                window.SmartAgenda.Toast.success('Η προβολή επαναφέρθηκε');
+            }
         },
 
         createTopControlButton: function(icon, label) {
@@ -441,22 +590,6 @@
             return button;
         },
 
-        getMapStyles: function() {
-            const isDark = document.body.classList.contains('dark');
-            if (!isDark) return [];
-
-            // Dark theme styles
-            return [
-                { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-                { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-                { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-                { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
-                { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
-                { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#746855" }] },
-                { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] }
-            ];
-        },
-
         refreshMap: function() {
             if (!this.map) return;
 
@@ -465,13 +598,129 @@
 
             // Refresh markers
             this.refreshClientMarkers();
-            // Don't refresh appointment markers - they're shown in client popups instead
-            // this.refreshAppointmentMarkers();
+        },
+
+        reloadMapWithLanguage: async function(newLanguage) {
+            console.log(`🌍 Reloading map with language: ${newLanguage}`);
+
+            // Save current map position and zoom
+            const currentPosition = this.map ? {
+                center: {
+                    lat: this.map.getCenter().lat(),
+                    lng: this.map.getCenter().lng()
+                },
+                zoom: this.map.getZoom()
+            } : null;
+
+            // Show loading indicator
+            const mapElement = document.getElementById('map');
+            const mapContainer = document.getElementById('map-container');
+            if (mapContainer) {
+                const existingLoading = document.getElementById('map-loading');
+                if (existingLoading) existingLoading.remove();
+
+                const loadingDiv = document.createElement('div');
+                loadingDiv.id = 'map-loading';
+                loadingDiv.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 16px;">🗺️</div>
+                    <div style="color: var(--text-primary); font-size: 14px;">Reloading map...</div>
+                `;
+                loadingDiv.style.cssText = `
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    background: var(--background);
+                    z-index: 1000;
+                `;
+                mapContainer.appendChild(loadingDiv);
+            }
+
+            // Remove old Google Maps API script
+            const oldScript = document.querySelector('script[src*="maps.googleapis.com"]');
+            if (oldScript) {
+                oldScript.remove();
+            }
+
+            // Clear Google Maps objects
+            if (window.google) {
+                delete window.google;
+            }
+
+            // Reset initialization flag
+            this.isInitialized = false;
+            this.map = null;
+            this.clientMarkers = [];
+
+            // Wait a bit for cleanup
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            // Reload Google Maps API with new language
+            try {
+                await this.loadGoogleMapsAPI();
+
+                // Reinitialize map
+                await this.initializeMap();
+
+                // Restore position if we had one
+                if (currentPosition && this.map) {
+                    this.map.setCenter(currentPosition.center);
+                    this.map.setZoom(currentPosition.zoom);
+                }
+
+                console.log(`✅ Map reloaded successfully with language: ${newLanguage}`);
+            } catch (error) {
+                console.error('❌ Error reloading map:', error);
+            }
         },
 
         // =============================================================================
         // CLIENT MARKERS
         // =============================================================================
+
+        /**
+         * Get client coordinates supporting both old and new data structures
+         * @param {Object} client - The client object
+         * @returns {Object|null} Object with lat and lng properties, or null if not found
+         */
+        getClientCoordinates: function(client) {
+            if (!client) return null;
+
+            // Check old format (direct lat/lng properties)
+            if (client.lat && client.lng) {
+                return {
+                    lat: parseFloat(client.lat),
+                    lng: parseFloat(client.lng)
+                };
+            }
+
+            // Check new format (addresses array with map type)
+            if (client.addresses && Array.isArray(client.addresses)) {
+                const mapAddress = client.addresses.find(addr => addr.type === 'map' && addr.lat && addr.lng);
+                if (mapAddress) {
+                    return {
+                        lat: parseFloat(mapAddress.lat),
+                        lng: parseFloat(mapAddress.lng)
+                    };
+                }
+            }
+
+            return null;
+        },
+
+        /**
+         * Check if client has valid location coordinates
+         * @param {Object} client - The client object
+         * @returns {boolean} True if client has valid coordinates
+         */
+        hasClientLocation: function(client) {
+            return this.getClientCoordinates(client) !== null;
+        },
 
         refreshClientMarkers: function() {
             // Check if Google Maps is loaded and map is initialized
@@ -480,10 +729,23 @@
                 return;
             }
 
+            // Prevent concurrent refreshes
+            if (this.isLoadingMarkers) {
+                console.warn('[Maps] Markers already loading, skipping refresh');
+                return;
+            }
+
+            this.isLoadingMarkers = true;
             console.log('[Maps] Refreshing client markers...');
 
-            // Clear existing markers
-            this.clientMarkers.forEach(marker => marker.setMap(null));
+            // Clear existing markers (works with both old and new Markers API)
+            this.clientMarkers.forEach(marker => {
+                if (marker.map) {
+                    marker.map = null; // Advanced Markers
+                } else if (marker.setMap) {
+                    marker.setMap(null); // Old Markers (fallback)
+                }
+            });
             this.clientMarkers = [];
 
             // Get clients from data manager
@@ -536,8 +798,8 @@
                 });
             }
 
-            // Count clients with location data
-            const clientsWithLocation = clients.filter(c => c.lat && c.lng);
+            // Count clients with location data (supports both old and new formats)
+            const clientsWithLocation = clients.filter(c => this.hasClientLocation(c));
             console.log('[Maps] Clients with location data:', clientsWithLocation.length);
 
             // Load markers in batches to improve performance with many clients
@@ -550,7 +812,7 @@
 
                 for (let i = startIdx; i < endIdx; i++) {
                     const client = clientsWithLocation[i];
-                    if (client.lat && client.lng) {
+                    if (this.hasClientLocation(client)) {
                         this.addClientMarker(client);
                     }
                 }
@@ -562,17 +824,18 @@
                     setTimeout(() => loadBatch(), 50);
                 } else {
                     console.log(`[Maps] ✅ Loaded ${this.clientMarkers.length} client markers on map`);
+                    this.isLoadingMarkers = false; // Done loading
                 }
             };
 
             loadBatch();
         },
 
-        addClientMarker: function(client) {
-            const position = {
-                lat: parseFloat(client.lat),
-                lng: parseFloat(client.lng)
-            };
+        addClientMarker: async function(client) {
+            const coords = this.getClientCoordinates(client);
+            if (!coords) return; // Skip if no valid coordinates
+
+            const position = coords;
 
             // Get marker color from client's primary type
             let markerColor = '#94a3b8'; // Default gray
@@ -596,21 +859,59 @@
                 }
             }
 
-            // Only use animation if there are few markers (to avoid performance issues)
-            const useAnimation = this.clientMarkers.length < 50;
+            try {
+                // Create native pin with custom color using Advanced Markers API
+                const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker");
 
+                // Create a native pin element with custom color
+                const pinElement = new PinElement({
+                    background: markerColor,
+                    borderColor: '#ffffff',
+                    glyphColor: '#ffffff',
+                    scale: 1.2
+                });
+
+                // Create Advanced Marker (much better performance than old Markers)
+                const marker = new AdvancedMarkerElement({
+                    map: this.map,
+                    position: position,
+                    title: client.name,
+                    content: pinElement.element
+                });
+
+                // Store client data with marker
+                marker.clientData = client;
+
+                // Click listener
+                marker.addListener('click', () => {
+                    this.showClientInfoWindow(marker, client);
+                });
+
+                this.clientMarkers.push(marker);
+            } catch (error) {
+                console.error('Error creating Advanced Marker:', error);
+                // Fallback to old marker if Advanced Markers fail
+                this.addClientMarkerFallback(client, position, markerColor);
+            }
+        },
+
+        // Fallback to old markers if Advanced Markers API fails
+        addClientMarkerFallback: function(client, position, markerColor) {
             const marker = new google.maps.Marker({
                 position: position,
                 map: this.map,
                 title: client.name,
-                icon: this.createMarkerIcon(markerColor),
-                animation: useAnimation ? google.maps.Animation.DROP : null
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 10,
+                    fillColor: markerColor,
+                    fillOpacity: 1,
+                    strokeColor: '#ffffff',
+                    strokeWeight: 2
+                }
             });
 
-            // Store client data with marker
             marker.clientData = client;
-
-            // Click listener
             marker.addListener('click', () => {
                 this.showClientInfoWindow(marker, client);
             });
@@ -618,31 +919,41 @@
             this.clientMarkers.push(marker);
         },
 
-        createMarkerIcon: function(color) {
-            const svg = `
-                <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="16" cy="16" r="12" fill="${color}" stroke="white" stroke-width="3"/>
-                    <circle cx="16" cy="16" r="4" fill="white"/>
-                </svg>
-            `;
-
-            return {
-                url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-                scaledSize: new google.maps.Size(32, 32),
-                anchor: new google.maps.Point(16, 16)
-            };
-        },
-
         showClientInfoWindow: function(marker, client) {
             const content = this.createClientInfoContent(client);
             this.infoWindow.setContent(content);
             this.infoWindow.open(this.map, marker);
 
-            // Bind event listeners after info window opens
+            // Pan map to ensure info window is fully visible (including X button)
             setTimeout(() => {
+                // Get marker position
+                const markerPosition = marker.position || marker.getPosition();
+                if (markerPosition) {
+                    // Pan with offset to ensure X button is visible
+                    // Offset moves the center down so the info window fits above
+                    const projection = this.map.getProjection();
+                    if (projection) {
+                        const scale = Math.pow(2, this.map.getZoom());
+                        const pixelOffset = new google.maps.Point(0, -120 / scale); // Offset upwards
+
+                        const worldPoint = projection.fromLatLngToPoint(markerPosition);
+                        const newWorldPoint = new google.maps.Point(
+                            worldPoint.x,
+                            worldPoint.y + pixelOffset.y
+                        );
+                        const newCenter = projection.fromPointToLatLng(newWorldPoint);
+
+                        this.map.panTo(newCenter);
+                    } else {
+                        // Fallback: simple pan to marker
+                        this.map.panTo(markerPosition);
+                    }
+                }
+
                 this.bindInfoWindowEvents(client);
             }, 100);
         },
+
 
         createClientInfoContent: function(client) {
             const isDark = document.body.classList.contains('dark') || document.body.getAttribute('data-theme') === 'dark';
@@ -665,61 +976,35 @@
             // Get location notes
             const locationNotes = client.locationNotes || '';
 
-            // Get client photo
-            const clientPhoto = client.photo;
-            const clientInitial = client.name ? client.name.charAt(0).toUpperCase() : '?';
-
-            // Get avatar color from client's primary type (same as marker color)
-            let avatarColor = '#94a3b8'; // Default gray
+            // Get available client types for badges
             const availableTypes = window.SmartAgenda?.Settings?.getClientTypes() || [];
 
-            if (client.clientTypes && client.clientTypes.length > 0) {
-                const primaryTypeId = client.primaryType || client.clientTypes[0];
-                const primaryType = availableTypes.find(t => t.id === primaryTypeId);
-                if (primaryType) {
-                    avatarColor = primaryType.color;
-                }
-            } else if (client.customerType) {
-                // Legacy support
-                const type = availableTypes.find(t => t.id === client.customerType);
-                if (type) {
-                    avatarColor = type.color;
-                }
-            }
-
             return `
-                <div style="background: ${bgColor}; color: ${textColor}; padding: 0; max-width: 300px; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);">
-                    <!-- Header with Photo -->
-                    <div style="background: linear-gradient(135deg, ${primaryColor} 0%, ${isDark ? '#1e40af' : '#1d4ed8'} 100%); padding: 12px 10px; position: relative;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <div style="position: relative;">
-                                ${clientPhoto ? `
-                                    <img src="${clientPhoto}" alt="${this.escapeHtml(client.name)}"
-                                         style="width: 46px; height: 46px; border-radius: 50%; border: 2px solid white; object-fit: cover; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
-                                ` : `
-                                    <div style="width: 46px; height: 46px; border-radius: 50%; background: ${avatarColor}; border: 2px solid white; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: bold; color: white; box-shadow: 0 2px 6px rgba(0,0,0,0.2);">
-                                        ${clientInitial}
-                                    </div>
-                                `}
-                            </div>
-                            <div style="flex: 1; min-width: 0;">
-                                <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: white; cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,0.2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
-                                    onclick="window.SmartAgenda.Maps.openClientDetails('${client.id}')">
-                                    ${this.escapeHtml(client.name)}
-                                </h3>
-                                ${clientAppointments.length > 0 ? `
-                                    <div style="margin-top: 2px; font-size: 11px; color: rgba(255,255,255,0.9); font-weight: 500; cursor: pointer; text-decoration: underline;"
-                                         onclick="event.stopPropagation(); window.SmartAgenda.Maps.showClientAppointments('${client.id}');"
-                                         title="Click to view appointments">
-                                        📅 ${clientAppointments.length} pending appointment${clientAppointments.length > 1 ? 's' : ''}
-                                    </div>
-                                ` : ''}
+                <div style="background: ${bgColor}; color: ${textColor}; padding: 14px; max-width: 340px; position: relative;">
+                    <!-- Custom Close Button -->
+                    <button onclick="window.SmartAgenda.Maps.closeInfoWindow()"
+                            style="position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border: none; background: ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}; color: ${textColor}; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center; transition: all 0.2s; z-index: 10;"
+                            onmouseover="this.style.background='${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'}';"
+                            onmouseout="this.style.background='${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}';"
+                            title="Close">
+                        ✕
+                    </button>
+
+                    <!-- Client Name -->
+                    <h3 style="margin: 0 35px 10px 0; font-size: 17px; font-weight: 700; color: ${textColor}; cursor: pointer; line-height: 1.3; word-wrap: break-word; overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"
+                        onclick="window.SmartAgenda.Maps.openClientDetails('${client.id}')">
+                        ${this.escapeHtml(client.name)}
+                    </h3>
+
+                    ${clientAppointments.length > 0 ? `
+                        <div style="margin-bottom: 10px; padding: 8px; background: ${isDark ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff'}; border-left: 3px solid ${primaryColor}; border-radius: 6px; cursor: pointer;"
+                             onclick="event.stopPropagation(); window.SmartAgenda.Maps.showClientAppointments('${client.id}');"
+                             title="Click to view appointments">
+                            <div style="font-size: 12px; font-weight: 600; color: ${primaryColor};">
+                                📅 ${clientAppointments.length} pending appointment${clientAppointments.length > 1 ? 's' : ''}
                             </div>
                         </div>
-                    </div>
-
-                    <!-- Content -->
-                    <div style="padding: 10px;">
+                    ` : ''}
 
                         <!-- Contact Info -->
                         <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -741,12 +1026,32 @@
                                 </div>
                             ` : ''}
 
-                            ${client.address ? `
-                                <div style="display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; background: ${surfaceColor}; border-radius: 6px; border: 1px solid ${borderColor};">
-                                    <span style="font-size: 15px;">📍</span>
-                                    <span style="font-size: 12px; line-height: 1.4; color: ${secondaryTextColor}; flex: 1;">${this.escapeHtml(client.address)}</span>
-                                </div>
-                            ` : ''}
+                            ${(() => {
+                                // Get address from new or old format
+                                let displayAddress = client.address; // Old format
+
+                                // Check new format (addresses array)
+                                if (!displayAddress && client.addresses && Array.isArray(client.addresses)) {
+                                    // Try to find address with type 'map' first (has coordinates)
+                                    const mapAddress = client.addresses.find(addr => addr.type === 'map' && addr.value);
+                                    if (mapAddress) {
+                                        displayAddress = mapAddress.value;
+                                    } else {
+                                        // Fall back to any address
+                                        const anyAddress = client.addresses.find(addr => addr.value);
+                                        if (anyAddress) {
+                                            displayAddress = anyAddress.value;
+                                        }
+                                    }
+                                }
+
+                                return displayAddress ? `
+                                    <div style="display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; background: ${surfaceColor}; border-radius: 6px; border: 1px solid ${borderColor};">
+                                        <span style="font-size: 15px;">📍</span>
+                                        <span style="font-size: 12px; line-height: 1.4; color: ${secondaryTextColor}; flex: 1;">${this.escapeHtml(displayAddress)}</span>
+                                    </div>
+                                ` : '';
+                            })()}
                         </div>
 
                         <!-- Client Types -->
@@ -791,36 +1096,21 @@
 
                         <!-- Action Buttons -->
                         <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid ${borderColor};">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
                                 <button onclick="window.SmartAgenda.Maps.navigateToClient('${client.id}')"
-                                        style="padding: 7px 8px; background: ${primaryColor}; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"
+                                        style="padding: 8px 10px; background: ${primaryColor}; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"
                                         onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)';"
                                         onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)';">
                                     🧭 Navigate
                                 </button>
-                                <button onclick="window.SmartAgenda.Maps.checkInAtClient('${client.id}')"
-                                        style="padding: 7px 8px; background: ${successColor}; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"
-                                        onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)';"
-                                        onmouseout="this.style.transform=''; this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)';">
-                                    ✓ Check In
-                                </button>
-                            </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-                                <button onclick="window.SmartAgenda.Maps.addToRoute('${client.id}')"
-                                        style="padding: 7px 8px; background: ${surfaceColor}; color: ${textColor}; border: 1px solid ${borderColor}; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 11px; transition: all 0.2s;"
-                                        onmouseover="this.style.background='${borderColor}';"
-                                        onmouseout="this.style.background='${surfaceColor}';">
-                                    ➕ Add to Route
-                                </button>
                                 <button onclick="window.SmartAgenda.Maps.editLocationNotes('${client.id}')"
-                                        style="padding: 7px 8px; background: ${surfaceColor}; color: ${textColor}; border: 1px solid ${borderColor}; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 11px; transition: all 0.2s;"
+                                        style="padding: 8px 10px; background: ${surfaceColor}; color: ${textColor}; border: 1px solid ${borderColor}; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px; transition: all 0.2s;"
                                         onmouseover="this.style.background='${borderColor}';"
                                         onmouseout="this.style.background='${surfaceColor}';">
                                     📝 Notes
                                 </button>
                             </div>
                         </div>
-                    </div>
                 </div>
             `;
         },
@@ -830,98 +1120,22 @@
             // This method is here for future enhancements
         },
 
-        // =============================================================================
-        // APPOINTMENT MARKERS
-        // =============================================================================
-
-        refreshAppointmentMarkers: function() {
-            // Clear existing appointment markers
-            this.appointmentMarkers.forEach(marker => marker.setMap(null));
-            this.appointmentMarkers = [];
-
-            // Get today's appointments
-            const appointments = window.SmartAgenda?.DataManager?.getAll('appointments') || [];
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            const todaysAppointments = appointments.filter(apt => {
-                if (!apt.date || apt.completed) return false;
-                const aptDate = new Date(apt.date);
-                aptDate.setHours(0, 0, 0, 0);
-                return aptDate.getTime() === today.getTime();
-            });
-
-            // Add markers for appointments with client locations
-            todaysAppointments.forEach(apt => {
-                if (apt.client) {
-                    const clients = window.SmartAgenda.DataManager.getAll('clients');
-                    const client = clients.find(c => String(c.id) === String(apt.client));
-                    if (client && client.lat && client.lng) {
-                        this.addAppointmentMarker(apt, client);
-                    }
-                }
-            });
-        },
-
-        addAppointmentMarker: function(appointment, client) {
-            const position = {
-                lat: parseFloat(client.lat),
-                lng: parseFloat(client.lng)
-            };
-
-            // Create a distinct marker for appointments
-            const marker = new google.maps.Marker({
-                position: position,
-                map: this.map,
-                title: `Appointment: ${client.name}`,
-                icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale: 8,
-                    fillColor: MARKER_COLORS.appointment,
-                    fillOpacity: 1,
-                    strokeColor: '#ffffff',
-                    strokeWeight: 2
-                },
-                zIndex: 1000 // Show above regular markers
-            });
-
-            marker.addListener('click', () => {
-                const content = `
-                    <div style="padding: 12px; min-width: 200px;">
-                        <h4 style="margin: 0 0 8px 0;">📅 Appointment</h4>
-                        <div style="margin-bottom: 8px;">
-                            <strong>${client.name}</strong>
-                        </div>
-                        <div style="font-size: 14px; color: var(--text-secondary);">
-                            ${new Date(appointment.date).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-                        </div>
-                        ${appointment.desc ? `
-                            <div style="margin-top: 8px; font-size: 13px;">
-                                ${this.escapeHtml(appointment.desc).substring(0, 100)}
-                            </div>
-                        ` : ''}
-                        <button onclick="window.SmartAgenda.Maps.navigateToClient('${client.id}')"
-                                style="margin-top: 12px; width: 100%; padding: 8px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer;">
-                            🧭 Navigate
-                        </button>
-                    </div>
-                `;
-                this.infoWindow.setContent(content);
-                this.infoWindow.open(this.map, marker);
-            });
-
-            this.appointmentMarkers.push(marker);
+        closeInfoWindow: function() {
+            if (this.infoWindow) {
+                this.infoWindow.close();
+            }
         },
 
         // =============================================================================
-        // PHASE 1: NAVIGATE TO CLIENT (NATIVE APP INTEGRATION)
+        // NAVIGATE TO CLIENT (NATIVE APP INTEGRATION)
         // =============================================================================
 
         navigateToClient: function(clientId) {
             const clients = window.SmartAgenda.DataManager.getAll('clients');
             const client = clients.find(c => String(c.id) === String(clientId));
 
-            if (!client || !client.lat || !client.lng) {
+            const coords = this.getClientCoordinates(client);
+            if (!client || !coords) {
                 window.SmartAgenda.Toast.error('Client location not available');
                 return;
             }
@@ -933,7 +1147,7 @@
                 this.openNativeNavigation(client);
             } else {
                 // Web fallback - open Google Maps in browser
-                const url = `https://www.google.com/maps/dir/?api=1&destination=${client.lat},${client.lng}`;
+                const url = `https://www.google.com/maps/dir/?api=1&destination=${coords.lat},${coords.lng}`;
                 window.open(url, '_blank');
             }
         },
@@ -941,14 +1155,17 @@
         openNativeNavigation: async function(client) {
             try {
                 // Open Google Maps directly without asking
-                const destination = `${client.lat},${client.lng}`;
+                const coords = this.getClientCoordinates(client);
+                if (!coords) return;
+
+                const destination = `${coords.lat},${coords.lng}`;
 
                 if (window.Capacitor.getPlatform() === 'ios') {
                     // iOS - try to open Google Maps app first
                     window.location.href = `comgooglemaps://?daddr=${destination}&directionsmode=driving`;
                     // Fallback to Apple Maps if Google Maps not installed
                     setTimeout(() => {
-                        window.location.href = `http://maps.apple.com/?daddr=${client.lat},${client.lng}`;
+                        window.location.href = `http://maps.apple.com/?daddr=${coords.lat},${coords.lng}`;
                     }, 500);
                 } else {
                     // Android - use geo URI which typically opens Google Maps
@@ -1064,11 +1281,12 @@
             const nearbyClients = [];
 
             clients.forEach(client => {
-                if (!client.lat || !client.lng) return;
+                const coords = this.getClientCoordinates(client);
+                if (!coords) return;
 
                 const distance = this.calculateDistance(
                     userLat, userLng,
-                    parseFloat(client.lat), parseFloat(client.lng)
+                    coords.lat, coords.lng
                 );
 
                 if (distance <= NEARBY_RADIUS_KM) {
@@ -1160,7 +1378,7 @@
             this.map.setZoom(13);
         },
 
-        showClientOnMap: function(clientId) {
+        showClientOnMap: function(clientId, retries = 0) {
             // Close modal
             const modals = document.querySelectorAll('.modal-overlay');
             modals.forEach(modal => {
@@ -1169,222 +1387,43 @@
                 }
             });
 
+            // If markers are still loading, wait and retry
+            if (this.isLoadingMarkers && retries < 20) {
+                console.log(`[Maps] Markers still loading, waiting... (retry ${retries + 1}/20)`);
+                setTimeout(() => this.showClientOnMap(clientId, retries + 1), 200);
+                return;
+            }
+
             // Find and show client marker
-            const marker = this.clientMarkers.find(m => String(m.clientData.id) === String(clientId));
+            const marker = this.clientMarkers.find(m => String(m.clientData?.id) === String(clientId));
             if (marker) {
-                this.map.setCenter(marker.getPosition());
-                this.map.setZoom(16);
-                google.maps.event.trigger(marker, 'click');
-            }
-        },
+                // Get position from Advanced Marker (uses .position property, not .getPosition())
+                const markerPosition = marker.position || (marker.getPosition ? marker.getPosition() : null);
+                if (markerPosition) {
+                    this.map.setCenter(markerPosition);
+                    this.map.setZoom(16);
 
-        // =============================================================================
-        // PHASE 1: ROUTE PLANNING
-        // =============================================================================
-
-        showRoutePlanner: function() {
-            const content = `
-                <div style="padding: 16px;">
-                    <div style="margin-bottom: 16px;">
-                        <p style="color: var(--text-secondary); margin-bottom: 12px;">
-                            Select clients from the map by clicking "Add to Route" on their info windows.
-                        </p>
-                        <div id="route-waypoints-list" style="margin-bottom: 16px;">
-                            ${this.renderRouteWaypointsList()}
-                        </div>
-                    </div>
-
-                    ${this.routeWaypoints.length > 1 ? `
-                        <div style="display: flex; gap: 8px;">
-                            <button onclick="window.SmartAgenda.Maps.optimizeRoute()"
-                                    style="flex: 1; padding: 10px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
-                                🎯 Optimize Route
-                            </button>
-                            <button onclick="window.SmartAgenda.Maps.clearRoute()"
-                                    style="flex: 1; padding: 10px; background: var(--danger); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
-                                🗑️ Clear
-                            </button>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-
-            window.SmartAgenda.UIComponents.showModal({
-                title: '🚗 Route Planning',
-                content: content,
-                buttons: [
-                    {
-                        label: 'Close',
-                        type: 'secondary',
-                        onClick: (modal) => window.SmartAgenda.UIComponents.closeModal(modal)
-                    }
-                ],
-                size: 'medium'
-            });
-        },
-
-        renderRouteWaypointsList: function() {
-            if (this.routeWaypoints.length === 0) {
-                return '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">No clients added to route yet</div>';
-            }
-
-            return `
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                    ${this.routeWaypoints.map((clientId, index) => {
-                        const client = window.SmartAgenda.DataManager.getById('clients', clientId);
-                        if (!client) return '';
-                        return `
-                            <div style="display: flex; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface);">
-                                <div style="width: 24px; height: 24px; background: var(--primary-color); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-weight: 600; font-size: 12px;">
-                                    ${index + 1}
-                                </div>
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 500;">${this.escapeHtml(client.name)}</div>
-                                    ${client.address ? `<div style="font-size: 12px; color: var(--text-secondary);">${this.escapeHtml(client.address)}</div>` : ''}
-                                </div>
-                                <button onclick="window.SmartAgenda.Maps.removeFromRoute('${clientId}')"
-                                        style="padding: 4px 8px; background: var(--danger); color: white; border: none; border-radius: 4px; cursor: pointer;">
-                                    ×
-                                </button>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            `;
-        },
-
-        addToRoute: function(clientId) {
-            if (this.routeWaypoints.includes(clientId)) {
-                window.SmartAgenda.Toast.warning('Client already in route');
-                return;
-            }
-
-            this.routeWaypoints.push(clientId);
-            window.SmartAgenda.Toast.success('Added to route');
-            this.infoWindow.close();
-
-            // Update route planner if open
-            this.updateRoutePlannerModal();
-        },
-
-        removeFromRoute: function(clientId) {
-            const index = this.routeWaypoints.indexOf(clientId);
-            if (index > -1) {
-                this.routeWaypoints.splice(index, 1);
-                window.SmartAgenda.Toast.success('Removed from route');
-                this.updateRoutePlannerModal();
-
-                if (this.routeWaypoints.length === 0) {
-                    this.clearRoute();
+                    // Trigger click event to open info window
+                    google.maps.event.trigger(marker, 'click');
+                } else {
+                    console.error('[Maps] Could not get marker position for client:', clientId);
+                    window.SmartAgenda.Toast.error('Could not locate client on map');
+                }
+            } else {
+                if (retries >= 20) {
+                    console.error('[Maps] Client marker not found after waiting:', clientId);
+                    window.SmartAgenda.Toast.warning('Client not found on map - ensure location is set');
+                } else {
+                    // Wait a bit longer and retry
+                    console.log(`[Maps] Marker not found yet for client ${clientId}, waiting... (retry ${retries + 1}/20)`);
+                    setTimeout(() => this.showClientOnMap(clientId, retries + 1), 200);
                 }
             }
         },
 
-        clearRoute: function() {
-            this.routeWaypoints = [];
-            if (this.directionsRenderer) {
-                this.directionsRenderer.setMap(null);
-                this.directionsRenderer.setMap(this.map);
-            }
-            this.updateRoutePlannerModal();
-            window.SmartAgenda.Toast.success('Route cleared');
-        },
-
-        optimizeRoute: async function() {
-            if (this.routeWaypoints.length < 2) {
-                window.SmartAgenda.Toast.warning('Add at least 2 clients to optimize route');
-                return;
-            }
-
-            window.SmartAgenda.Toast.info('Calculating optimal route...');
-
-            try {
-                // Get user location as starting point
-                const userPosition = await this.getUserPosition();
-                const origin = userPosition ?
-                    new google.maps.LatLng(userPosition.lat, userPosition.lng) :
-                    this.getClientPosition(this.routeWaypoints[0]);
-
-                // Prepare waypoints (filter out clients that don't exist or don't have location)
-                const waypoints = this.routeWaypoints
-                    .map(clientId => {
-                        const client = window.SmartAgenda.DataManager.getById('clients', clientId);
-                        if (!client || !client.lat || !client.lng) {
-                            console.warn(`Client ${clientId} not found or missing location, removing from route`);
-                            return null;
-                        }
-                        return {
-                            location: new google.maps.LatLng(parseFloat(client.lat), parseFloat(client.lng)),
-                            stopover: true,
-                            clientId: clientId // Store clientId for later reference
-                        };
-                    })
-                    .filter(waypoint => waypoint !== null);
-
-                // Update routeWaypoints to only include valid clients
-                this.routeWaypoints = waypoints.map(w => w.clientId);
-
-                if (waypoints.length < 2) {
-                    window.SmartAgenda.Toast.error('Not enough valid clients with locations in route');
-                    return;
-                }
-
-                // Calculate route
-                const request = {
-                    origin: origin,
-                    destination: waypoints[waypoints.length - 1].location,
-                    waypoints: waypoints.slice(0, -1),
-                    optimizeWaypoints: true,
-                    travelMode: google.maps.TravelMode.DRIVING
-                };
-
-                this.directionsService.route(request, (result, status) => {
-                    if (status === 'OK') {
-                        this.directionsRenderer.setDirections(result);
-                        this.activeRoute = result;
-
-                        // Reorder waypoints based on optimization
-                        // waypoint_order contains indices for waypoints[0..-2] (excludes destination)
-                        const order = result.routes[0].waypoint_order;
-                        const waypointsWithoutLast = this.routeWaypoints.slice(0, -1);
-                        const lastWaypoint = this.routeWaypoints[this.routeWaypoints.length - 1];
-
-                        // Reorder based on optimized order, then add destination at end
-                        const optimized = order.map(i => waypointsWithoutLast[i]);
-                        optimized.push(lastWaypoint);
-                        this.routeWaypoints = optimized;
-
-                        // Calculate total distance and time
-                        let totalDistance = 0;
-                        let totalDuration = 0;
-                        result.routes[0].legs.forEach(leg => {
-                            totalDistance += leg.distance.value;
-                            totalDuration += leg.duration.value;
-                        });
-
-                        const distanceKm = (totalDistance / 1000).toFixed(1);
-                        const durationMin = Math.round(totalDuration / 60);
-
-                        window.SmartAgenda.Toast.success(`Route optimized: ${distanceKm}km, ${durationMin} min`);
-                        this.updateRoutePlannerModal();
-                    } else {
-                        console.error('Directions request failed:', status);
-                        window.SmartAgenda.Toast.error('Could not calculate route');
-                    }
-                });
-            } catch (error) {
-                console.error('Route optimization error:', error);
-                window.SmartAgenda.Toast.error('Route optimization failed');
-            }
-        },
-
-        getClientPosition: function(clientId) {
-            const client = window.SmartAgenda.DataManager.getById('clients', clientId);
-            if (client && client.lat && client.lng) {
-                return new google.maps.LatLng(parseFloat(client.lat), parseFloat(client.lng));
-            }
-            return null;
-        },
+        // =============================================================================
+        // HELPER FUNCTIONS
+        // =============================================================================
 
         getUserPosition: function() {
             return new Promise((resolve) => {
@@ -1404,43 +1443,6 @@
                     { timeout: 5000 }
                 );
             });
-        },
-
-        updateRoutePlannerModal: function() {
-            const modal = document.querySelector('.modal-overlay[style*="display: flex"]');
-            if (!modal) return;
-
-            const titleElement = modal.querySelector('.modal-title');
-            if (titleElement && titleElement.textContent.includes('Route Planning')) {
-                const contentContainer = modal.querySelector('.modal-body');
-                if (contentContainer) {
-                    contentContainer.innerHTML = `
-                        <div style="padding: 16px;">
-                            <div style="margin-bottom: 16px;">
-                                <p style="color: var(--text-secondary); margin-bottom: 12px;">
-                                    Select clients from the map by clicking "Add to Route" on their info windows.
-                                </p>
-                                <div id="route-waypoints-list" style="margin-bottom: 16px;">
-                                    ${this.renderRouteWaypointsList()}
-                                </div>
-                            </div>
-
-                            ${this.routeWaypoints.length > 1 ? `
-                                <div style="display: flex; gap: 8px;">
-                                    <button onclick="window.SmartAgenda.Maps.optimizeRoute()"
-                                            style="flex: 1; padding: 10px; background: var(--primary-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
-                                        🎯 Optimize Route
-                                    </button>
-                                    <button onclick="window.SmartAgenda.Maps.clearRoute()"
-                                            style="flex: 1; padding: 10px; background: var(--danger); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
-                                        🗑️ Clear
-                                    </button>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `;
-                }
-            }
         },
 
         // =============================================================================
@@ -1468,7 +1470,7 @@
             const appointmentsWithLocations = todaysAppointments.filter(apt => {
                 if (!apt.client) return false;
                 const client = window.SmartAgenda.DataManager.getById('clients', apt.client);
-                return client && client.lat && client.lng;
+                return client && this.hasClientLocation(client);
             });
 
             if (appointmentsWithLocations.length === 0) {
@@ -1489,8 +1491,9 @@
 
             appointments.forEach(apt => {
                 const client = window.SmartAgenda.DataManager.getById('clients', apt.client);
-                if (client && client.lat && client.lng) {
-                    bounds.extend(new google.maps.LatLng(parseFloat(client.lat), parseFloat(client.lng)));
+                const coords = this.getClientCoordinates(client);
+                if (coords) {
+                    bounds.extend(new google.maps.LatLng(coords.lat, coords.lng));
                 }
             });
 
@@ -1797,75 +1800,6 @@
                 console.error('Check-in error:', error);
                 window.SmartAgenda.Toast.error('Check-in failed');
             }
-        },
-
-        loadCheckInHistory: function() {
-            try {
-                const saved = localStorage.getItem('checkInHistory');
-                if (saved) {
-                    this.checkIns = JSON.parse(saved);
-                }
-            } catch (error) {
-                console.error('Error loading check-in history:', error);
-                this.checkIns = [];
-            }
-        },
-
-        // =============================================================================
-        // PHASE 2/MOBILE: OFFLINE MAP CACHING
-        // =============================================================================
-
-        toggleOfflineMaps: async function() {
-            if (!window.Capacitor || !window.Capacitor.isNativePlatform()) {
-                window.SmartAgenda.Toast.warning('Offline maps only available on mobile app');
-                return;
-            }
-
-            this.offlineCache.enabled = !this.offlineCache.enabled;
-
-            if (this.offlineCache.enabled) {
-                window.SmartAgenda.Toast.info('Offline maps enabled - caching visible area...');
-                await this.cacheVisibleArea();
-            } else {
-                window.SmartAgenda.Toast.info('Offline maps disabled');
-                this.clearOfflineCache();
-            }
-        },
-
-        cacheVisibleArea: async function() {
-            // This is a simplified implementation
-            // In production, you would use proper tile caching with IndexedDB
-
-            const bounds = this.map.getBounds();
-            if (!bounds) return;
-
-            try {
-                const cacheData = {
-                    bounds: {
-                        north: bounds.getNorthEast().lat(),
-                        south: bounds.getSouthWest().lat(),
-                        east: bounds.getNorthEast().lng(),
-                        west: bounds.getSouthWest().lng()
-                    },
-                    zoom: this.map.getZoom(),
-                    timestamp: Date.now()
-                };
-
-                // Store cache metadata
-                this.offlineCache.lastUpdate = cacheData.timestamp;
-                localStorage.setItem('mapOfflineCache', JSON.stringify(cacheData));
-
-                window.SmartAgenda.Toast.success('Map area cached for offline use');
-            } catch (error) {
-                console.error('Error caching map:', error);
-                window.SmartAgenda.Toast.error('Failed to cache map');
-            }
-        },
-
-        clearOfflineCache: function() {
-            this.offlineCache.tiles.clear();
-            this.offlineCache.lastUpdate = null;
-            localStorage.removeItem('mapOfflineCache');
         },
 
         // =============================================================================

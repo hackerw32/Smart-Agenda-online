@@ -24,50 +24,39 @@
         currentUser: null,
 
         /**
-         * Initialize Firebase
+         * Initialize Firebase - DEPRECATED
+         *
+         * ⚠️ This service is deprecated. Cloud backup has moved to Google Drive.
+         * Please use GoogleDriveService instead.
          */
         init: function() {
-            try {
-                // Initialize Firebase
-                this.app = firebase.initializeApp(firebaseConfig);
-                this.auth = firebase.auth();
-                this.db = firebase.firestore();
-                this.storage = firebase.storage();
+            console.warn('⚠️ Firebase Service is DEPRECATED');
+            console.log('ℹ️ Cloud backup has moved to Google Drive for better security and privacy.');
+            console.log('ℹ️ Your local data is safe. Please sign in with Google Drive and create a new backup.');
 
-                // Export to global scope for backwards compatibility (like old working version)
-                window.auth = this.auth;
-                window.db = this.db;
+            // Show migration notice to user
+            setTimeout(() => {
+                this.showMigrationNotice();
+            }, 3000);  // Show after 3 seconds
 
-                console.log('✅ Firebase initialized successfully!');
+            // DO NOT initialize Firebase
+            return false;
+        },
 
-                // Listen for auth state changes
-                this.auth.onAuthStateChanged((user) => {
-                    this.currentUser = user;
-                    this.updateUIForAuthState(user);
-
-                    if (user) {
-                        console.log('🔐 User signed in:', user.email);
-                        if (window.SmartAgenda && window.SmartAgenda.Toast) {
-                            window.SmartAgenda.Toast.success(`Welcome back, ${user.email}`);
-                        }
-
-                        // Auto-restore backup on sign in
-                        this.autoRestoreBackup();
-                    } else {
-                        console.log('🔓 User signed out');
-                    }
-                });
-
-            } catch (error) {
-                console.error('❌ Firebase initialization error:', error);
-                if (window.SmartAgenda && window.SmartAgenda.Toast) {
-                    window.SmartAgenda.Toast.error('Failed to initialize cloud services');
-                }
+        /**
+         * Show migration notice to user
+         */
+        showMigrationNotice: function() {
+            if (window.SmartAgenda && window.SmartAgenda.Toast) {
+                window.SmartAgenda.Toast.info(
+                    'Το cloud backup μεταφέρθηκε στο Google Drive για καλύτερη ασφάλεια. Παρακαλώ συνδεθείτε στο Google Drive και δημιουργήστε νέο backup.',
+                    { duration: 8000 }
+                );
             }
         },
 
         /**
-         * Update UI based on auth state
+         * Update UI based on auth state - DEPRECATED
          */
         updateUIForAuthState: function(user) {
             const userNameEl = document.getElementById('user-name');
